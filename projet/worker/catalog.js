@@ -25,6 +25,11 @@ const demoProfiles = [
   },
 ];
 
+// Les profils fictifs ne s'affichent que si SHOW_DEMO_PROFILES vaut "true" (tests, démonstration).
+function listedProfiles(env) {
+  return env?.SHOW_DEMO_PROFILES === 'true' ? demoProfiles : [];
+}
+
 const siteAssets = /* SITE_ASSETS */ {};
 const siteAssetRoutes = new Map([
   ['/assets/mon-nzonzi.webp', ['mon-nzonzi.webp', 'image/webp']],
@@ -55,13 +60,13 @@ function normalize(value) {
 function profilePrice(profile) {
   return formatEuro.format(Math.round(profile.net * 100 / commissionShare) / 100);
 }
-function filterState(params, regions) {
+function filterState(params, regions, profiles) {
   const region = params.get('region') || '';
   const community = params.get('communaute') || '';
   return {
     q: (params.get('q') || '').trim().slice(0, 100),
     region: regions.includes(region) ? region : '',
-    communaute: demoProfiles.some(profile => profile.community === community) ? community : '',
+    communaute: profiles.some(profile => profile.community === community) ? community : '',
   };
 }
 function filterQuery(filters) {
@@ -431,16 +436,16 @@ function card(profile, query) {
     <a class="btn secondary" aria-label="Voir le profil de ${escapeHtml(profile.name)}" href="/nzonzi/${profile.slug}${query}">Voir le profil ${icon('arrow')}</a></div></div>
   </article>`;
 }
-function directoryPage(filters, regions) {
+function directoryPage(filters, regions, profiles) {
   const { q, region, communaute } = filters;
   const words = normalize(q).split(/\s+/).filter(Boolean);
-  const filtered = demoProfiles.filter(profile => {
+  const filtered = profiles.filter(profile => {
     const searchable = normalize([profile.name, profile.city, profile.region, profile.community, ...profile.languages].join(' '));
     return (!region || profile.region === region) && (!communaute || profile.community === communaute)
       && words.every(word => searchable.includes(word));
   });
   const query = filterQuery(filters);
-  const communities = [...new Set(demoProfiles.map(profile => profile.community))].sort();
+  const communities = [...new Set(profiles.map(profile => profile.community))].sort();
   return layout('Trouver un nzonzi pour votre cérémonie de dot', `<main id="main">
 <section class="hero" aria-labelledby="hero-title"><div class="shell">
   <div class="hero-copy"><p class="kicker">Deux familles, une rencontre</p>
@@ -473,7 +478,7 @@ function directoryPage(filters, regions) {
     <button type="submit" class="btn">Rechercher ${icon('arrow')}</button>
   </form>
   <div class="result-bar"><span>${filtered.length} profil${filtered.length === 1 ? '' : 's'} ${filtered.length === 1 ? 'trouvé' : 'trouvés'}</span>${query ? '<a class="link" href="/#nzonzi">Réinitialiser les filtres</a>' : ''}</div>
-  ${filtered.length ? `<div class="cards">${filtered.map(profile => card(profile, query)).join('')}</div>` : '<div class="panel empty"><h3>Aucun profil pour ces critères</h3><p>Modifiez un filtre ou essayez une autre ville ou langue.</p><a class="btn secondary" href="/#nzonzi">Voir tous les profils</a> <a class="link" href="/presentation#demande">Préparer une demande générale</a></div>'}
+  ${!profiles.length ? '<div class="panel empty"><h3>Les premiers nzonzi arrivent bientôt</h3><p>Nous sélectionnons actuellement les premiers porte-paroles de la plateforme. Revenez très prochainement.</p><a class="btn secondary" href="/partenaire">Vous êtes nzonzi ? Rejoignez-nous</a></div>' : filtered.length ? `<div class="cards">${filtered.map(profile => card(profile, query)).join('')}</div>` : '<div class="panel empty"><h3>Aucun profil pour ces critères</h3><p>Modifiez un filtre ou essayez une autre ville ou langue.</p><a class="btn secondary" href="/#nzonzi">Voir tous les profils</a> <a class="link" href="/presentation#demande">Préparer une demande générale</a></div>'}
 </div></section>
 <section class="method" id="comment" aria-labelledby="method-title"><div class="shell">
   <p class="kicker">Votre cérémonie, pas à pas</p><h2 id="method-title">Comment ça marche ?</h2>
@@ -581,13 +586,14 @@ export async function catalog(request, env, regions) {
       headers: { ...catalogHeaders, 'Content-Type': type },
     });
   }
-  const filters = filterState(url.searchParams, regions);
+  const profiles = listedProfiles(env);
+  const filters = filterState(url.searchParams, regions, profiles);
   if (pathname === '/' || pathname === '/index.html') {
     if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
-    return catalogResponse(request.method === 'HEAD' ? null : directoryPage(filters, regions));
+    return catalogResponse(request.method === 'HEAD' ? null : directoryPage(filters, regions, profiles));
   }
   if (!pathname.startsWith('/nzonzi/')) return null;
-  const profile = demoProfiles.find(entry => pathname === '/nzonzi/' + entry.slug);
+  const profile = profiles.find(entry => pathname === '/nzonzi/' + entry.slug);
   if (!profile) return catalogResponse(request.method === 'HEAD' ? null : layout('Profil introuvable', '<main class="profile" id="main"><div class="shell"><h1>Profil introuvable</h1><a class="back" href="/#nzonzi">Retour aux profils</a></div></main>'), 404);
   const query = filterQuery(filters);
   if (request.method === 'POST') return saveDemoRequest(request, env, profile, query);
