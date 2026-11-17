@@ -1,0 +1,26 @@
+# Configuration Cloudflare Workers de Mon Nzonzi.
+# Le déploiement se fait depuis GitHub (Workers Builds) : à chaque fusion sur
+# main, Cloudflare reconstruit et publie le site.
+name = "mon-nzonzi"
+main = "cloudflare/entry.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[build]
+command = "bash scripts/build.sh"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mon-nzonzi"
+# Identifiant de la base D1 « mon-nzonzi » (non secret).
+database_id = "aa8eca6c-5e24-443e-a429-2fe6cb3790a0"
+migrations_dir = "drizzle"
+
+# Photos de profil (facultatif : sans ce bucket, l'ajout de photo est
+# simplement indisponible). Décommenter une fois le bucket R2 créé.
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "mon-nzonzi-photos"

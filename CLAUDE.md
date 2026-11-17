@@ -15,7 +15,7 @@ Continuer un prototype français qui met en relation familles et nzonzi, porte-p
 
 ## Architecture
 Cloudflare Worker ES module, JavaScript natif, HTML/CSS/JS générés dans les modules. Aucun framework frontend ni dépendance npm déclaré. DB : D1, binding DB. Photos : R2, binding BUCKET.
-Entrée : projet/worker/index.js. Catalogue, thème et animations : projet/worker/catalog.js. Assemblage : projet/scripts/bundle-worker.mjs. Sortie : projet/dist/server/index.js.
+Entrée : projet/worker/index.js (Cloudflare : projet/cloudflare/entry.js, voir projet/DEPLOIEMENT.md). Catalogue, thème et animations : projet/worker/catalog.js. Assemblage : projet/scripts/bundle-worker.mjs. Sortie : projet/dist/server/index.js.
 
 ## Construction et vérification
 Depuis projet/, avec Bash et Node.js 24 (v24.22.1 utilisée pour cet export) :
@@ -25,6 +25,7 @@ node scripts/check-directory.mjs
 node scripts/check-profile.mjs
 node scripts/check-photo.mjs
 node scripts/check-partner.mjs
+node scripts/check-access.mjs
 ```
 Les tests utilisent node:sqlite. Ne pas éditer seulement dist/ : il est régénéré au build. Aucun script npm start/dev n’existe dans la source. Le script de build supprime puis recrée dist/.
 
