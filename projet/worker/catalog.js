@@ -184,13 +184,14 @@ const siteTheme = `
 @font-face{font-family:"Playfair Display";src:url("/assets/playfair-display.woff2") format("woff2");font-style:normal;font-weight:400 900;font-display:swap}
 :root{
   color-scheme:light;
-  --olive:#505A27;--forest:#1E2911;--cream:#FFF9D7;--ochre:#D18F49;--terracotta:#AA5818;
-  --paper:#fffdf4;--ink:var(--forest);--muted:#505540;--line:#d7d9c4;--field-border:#84876f;
-  --soft:#f3f4e7;--bg:#f3f4e7;--success:#edf0e0;
+  /* Palette « Style Apple · chocolat » : blanc, noir et marron. */
+  --olive:#5C3A24;--forest:#111111;--cream:#EFE6DC;--ochre:#B08060;--terracotta:#6B4226;
+  --paper:#ffffff;--ink:var(--forest);--muted:#6e6e73;--line:#e5e5ea;--field-border:#c7c7cc;
+  --soft:#f5f5f7;--bg:#f5f5f7;--success:#efeff2;
   --brown:var(--forest);
-  --stage:radial-gradient(ellipse at 50% 43%, #3a4821 0%, var(--forest) 76%);
-  --display:"Playfair Display",Georgia,serif;
-  --font:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --stage:radial-gradient(ellipse at 50% 43%, #4a3020 0%, #1a110b 78%);
+  --display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Inter,Arial,sans-serif;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Inter,Arial,sans-serif;
 }
 .brand-logo{display:block;width:212px;max-width:100%;height:auto}
 footer .brand-logo{width:172px;padding:7px 9px;border-radius:8px;background:var(--cream)}
@@ -273,7 +274,7 @@ input::placeholder{color:var(--muted)}
 .pills{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
 .pills li{border-radius:999px;padding:4px 9px;font-size:12px;background:#ffffffb8}
 .card-content>p:not(.location){color:var(--muted);font-size:14px;margin:12px 0 17px}
-.card-bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;border-top:1px solid #1e29112e;padding-top:13px}
+.card-bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto;border-top:1px solid #1111112e;padding-top:13px}
 .price{display:block;font-size:25px}
 .card-bottom small,.muted{color:var(--muted);font-size:12px}
 .card-bottom .btn{padding-inline:12px;background:var(--ink);border-color:var(--ink);color:white}
@@ -318,7 +319,7 @@ footer a{text-underline-offset:3px}
 .contact form{display:grid;gap:13px;border-top:1px solid var(--line);margin-top:18px;padding-top:17px}
 .contact .btn{justify-self:start}
 .two-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.feedback{margin-top:15px;padding:12px 14px;background:var(--success);border:1px solid #b7c2b0;border-radius:14px}
+.feedback{margin-top:15px;padding:12px 14px;background:var(--success);border:1px solid #d1d1d6;border-radius:14px}
 .feedback p+p{margin-top:6px}
 .feedback.error{background:var(--cream);border-color:var(--terracotta)}
 @media(max-width:950px){
