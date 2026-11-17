@@ -7,6 +7,7 @@ const db = new DatabaseSync(':memory:');
 db.exec(readFileSync(new URL('../drizzle/0001_demo_requests.sql', import.meta.url), 'utf8'));
 const env = {
   NZOZI_ALLOWED_EMAILS: 'partner@example.test',
+  SHOW_DEMO_PROFILES: 'true',
   DB: { prepare(sql) {
     const statement = db.prepare(sql);
     return { bind(...args) { return {
@@ -21,6 +22,13 @@ const owner = { 'oai-authenticated-user-id': 'owner', 'oai-authenticated-user-em
 const family = { 'oai-authenticated-user-id': 'family', 'oai-authenticated-user-email': 'family@example.test' };
 const visit = (path, init) => worker.fetch(new Request(new URL(path, origin), init), env);
 const html = async (path, headers) => (await visit(path, { headers })).text();
+
+// Sans le drapeau de démonstration, aucun profil fictif n'est publié.
+const publicEnv = { ...env, SHOW_DEMO_PROFILES: undefined };
+const publicHome = await (await worker.fetch(new Request(new URL('/', origin)), publicEnv)).text();
+assert.match(publicHome, /Les premiers nzonzi arrivent bientôt/);
+assert.doesNotMatch(publicHome, /Jean Mavungu|Patrick Ilunga|André Mbuyi/);
+assert.equal((await worker.fetch(new Request(new URL('/nzonzi/jean-mavungu', origin)), publicEnv)).status, 404);
 
 const home = await html('/');
 assert.match(home, /3 profils trouvés/);
