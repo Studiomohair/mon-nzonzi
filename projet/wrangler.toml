@@ -15,8 +15,8 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "mon-nzonzi"
-# Identifiant de la base D1 créée dans le tableau de bord Cloudflare.
-database_id = "A_RENSEIGNER"
+# Identifiant de la base D1 « mon-nzonzi » (non secret).
+database_id = "aa8eca6c-5e24-443e-a429-2fe6cb3790a0"
 migrations_dir = "drizzle"
 
 # Photos de profil (facultatif : sans ce bucket, l'ajout de photo est
