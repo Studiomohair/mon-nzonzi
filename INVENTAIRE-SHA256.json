@@ -1,0 +1,22 @@
+{
+  ".env.example": "e2c36e0297642eba862cb47b8f13e7daf4803e0009ef4ca72610ad152bd38073",
+  ".openai/hosting.json": "71139459005f30c588ffde8e238b4ddeaba539e26f3b0b37487771ea6dd3820d",
+  "dist/.openai/hosting.json": "71139459005f30c588ffde8e238b4ddeaba539e26f3b0b37487771ea6dd3820d",
+  "dist/server/index.js": "7cb0b82f61c8bca4122e04bb81048716b3a9ca23f377df5d67abe021a6b97da7",
+  "drizzle/0000_nzozi_profiles.sql": "dda0ba3f0c3f0c1933b4d0bbc1183e12dcbe6ada76bb90115ddbf1f5209c3588",
+  "drizzle/0001_demo_requests.sql": "77b250fa9a4a009053fa200763e7b7f02c258a9ba7101dd8d8b0c3d51e1a830d",
+  "drizzle/meta/_journal.json": "a5a6d287778c98d8210e20cc4bf756da434e2a7707949d748bfcc6af99865820",
+  "package.json": "c9a2119b80a2cfb791aab9fded216e5e29b4c198f6b64d4292b52e099df0eb70",
+  "scripts/build.sh": "7e12515991948660a1d4a624e5f6347d5d40615c6ceb37ac02cbe4c088e5b3e0",
+  "scripts/bundle-worker.mjs": "10d4cdac8747c875d9d102e56ddf3121b07c81f6e6413d8a7aa1cbb2d1c083bd",
+  "scripts/check-directory.mjs": "5845f7bd263d48871e1422627b31b8ffd32d94f81529fa2a362be658e1ed7fd4",
+  "scripts/check-partner.mjs": "3a297365fce8d6ade4809b73d11c823fb1cdf0e4e5289b3135572d8f7c187f9d",
+  "scripts/check-photo.mjs": "113d515af8eef28307637a31017ecfae83392c9126259f13c0ec8a6809bc82f6",
+  "scripts/check-profile.mjs": "8a6988edcced8e7a1886bcb8193684172df73cacdbb3605308bb95a865a7ab42",
+  "scripts/validate-artifact.mjs": "39d9df53ac2461962466d5965c5f4d06f08024ceca40605952d8b753b88d41fd",
+  "worker/assets/mon-nzonzi.webp": "f06ba7457aa322a5b4644f1760749c98f700f9622f4060b3a481f5e9d07541da",
+  "worker/assets/playfair-display.woff2": "e0c764a8e9e1cce92163c55bac4b2ad6cd4cf8c696ce2289ab5c41565e65b7e2",
+  "worker/assets/playfair-license.txt": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e",
+  "worker/catalog.js": "47b6ffd1ce001e75e07f2192f3155bdd0fb4e8667ed2f234569f6d54667782ab",
+  "worker/index.js": "260f3f2e186659c7d1b17b8d914822bbb9cbe6665da843f9b72aad44fd451445"
+}

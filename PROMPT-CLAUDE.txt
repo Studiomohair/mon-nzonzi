@@ -1,0 +1,9 @@
+Je reprends Mon Nzonzi, une plateforme de mise en relation entre familles et nzonzi (porte-paroles/médiateurs lors des cérémonies de dot). Voici le dossier de passation et le code source actuel.
+
+Commence par lire CLAUDE.md, PASSATION.md, puis projet/worker/index.js, projet/worker/catalog.js, les migrations et les scripts. Fais un audit court : ce qui fonctionne déjà, les limites du prototype et les adaptations nécessaires pour le lancer chez moi.
+
+Préserve la charte actuelle, le logo, les animations et les fonctionnalités. Les profils de l’annuaire sont fictifs ; les demandes ne sont pas des réservations réelles. Le simulateur de commission reste dans l’espace nzonzi.
+
+Je veux poursuivre le développement à partir de cette base, sans repartir de zéro. Propose un chemin simple pour l’exécuter avec Claude Code. Si nécessaire, ajoute une configuration de développement isolée, mais ne modifie pas le site existant, ses DNS ou son accès privé. La connexion dépend actuellement de Sites : ne fais pas confiance aux en-têtes d’identité d’un navigateur hors de cette plateforme. N’invente pas de secrets ni de données de production.
+
+Construis le projet et exécute les contrôles existants. Explique-moi ensuite les prochaines étapes en français simple et demande quel changement je souhaite traiter en premier.

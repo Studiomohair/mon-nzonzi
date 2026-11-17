@@ -1,0 +1,5 @@
+projet/dist/
+node_modules/
+.env
+.dev.vars
+.wrangler/
