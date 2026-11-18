@@ -27,6 +27,8 @@ assert.equal(await verifyAccessToken(await sign({ ...good, exp: now - 5 }), env,
 assert.equal(await verifyAccessToken(await sign(good, other.privateKey), env, fetcher), null, 'mauvaise signature');
 assert.equal(await verifyAccessToken(await sign(good, privateKey, { alg: 'none', kid: 'k1' }), env, fetcher), null, 'alg none');
 assert.equal(await verifyAccessToken(await sign(good), {}, fetcher), null, 'configuration absente');
+assert.deepEqual(await verifyAccessToken(await sign(good),
+  { ...env, ACCESS_TEAM_DOMAIN: `https://${team}/cdn-cgi/access/certs` }, fetcher), { id: 'user-1', email: 'partner@example.test' }, 'URL JWKS complète');
 assert.equal(await verifyAccessToken('pas.un.jeton', env, fetcher), null);
 assert.equal(certCalls, 1, 'certificats mis en cache');
 
