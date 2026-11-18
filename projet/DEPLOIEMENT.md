@@ -16,7 +16,7 @@ en option, un bucket R2 pour les photos (binding `BUCKET`).
    Noter le *team domain* et l'*AUD tag* affichés.
 4. **Variables** (Worker → Settings → Variables and Secrets) :
    - `ACCESS_TEAM_DOMAIN` : ex. `mon-equipe.cloudflareaccess.com`, ou l'URL *JWKS* complète
-   - `ACCESS_AUD` : l'AUD tag de l'application Access
+   - `ACCESS_AUD` : l'AUD tag de l'application Access (plusieurs applications : AUD séparés par des virgules)
    - `NZOZI_ALLOWED_EMAILS` : adresses des partenaires autorisés, séparées par des virgules
 
 Ensuite, chaque fusion sur `main` redéploie automatiquement le site.

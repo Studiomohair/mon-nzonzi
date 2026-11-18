@@ -8,7 +8,7 @@
 //
 // Variables à définir dans Cloudflare :
 //   ACCESS_TEAM_DOMAIN  ex. "mon-equipe.cloudflareaccess.com" (ou l'URL « JWKS » complète)
-//   ACCESS_AUD          « Application Audience (AUD) Tag » de l'application Access
+//   ACCESS_AUD          « AUD tag » de l'application Access (plusieurs : séparés par des virgules)
 //   NZOZI_ALLOWED_EMAILS adresses des partenaires autorisés, séparées par des virgules
 import worker from '../dist/server/index.js';
 
@@ -43,8 +43,9 @@ async function accessKeys(teamDomain, fetcher) {
 export async function verifyAccessToken(token, env, fetcher = fetch) {
   // Accepte « equipe.cloudflareaccess.com » ou l'URL JWKS complète copiée depuis le tableau de bord.
   const teamDomain = (env.ACCESS_TEAM_DOMAIN || '').trim().replace(/^https?:\/\//, '').split('/')[0];
-  const audience = (env.ACCESS_AUD || '').trim();
-  if (!token || !teamDomain || !audience) return null;
+  // Plusieurs applications Access possibles (workers.dev et mon-nzonzi.fr) : AUD séparés par des virgules.
+  const allowedAudiences = (env.ACCESS_AUD || '').split(',').map(value => value.trim()).filter(Boolean);
+  if (!token || !teamDomain || !allowedAudiences.length) return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   let header, payload;
@@ -58,7 +59,7 @@ export async function verifyAccessToken(token, env, fetcher = fetch) {
   if (!valid) return null;
   const now = Math.floor(Date.now() / 1000);
   const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-  if (!audiences.includes(audience)) return null;
+  if (!audiences.some(value => allowedAudiences.includes(value))) return null;
   if (payload.iss !== `https://${teamDomain}`) return null;
   if (typeof payload.exp !== 'number' || payload.exp < now) return null;
   if (typeof payload.nbf === 'number' && payload.nbf > now + 60) return null;

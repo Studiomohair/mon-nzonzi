@@ -30,6 +30,9 @@ assert.equal(await verifyAccessToken(await sign(good), {}, fetcher), null, 'conf
 assert.deepEqual(await verifyAccessToken(await sign(good),
   { ...env, ACCESS_TEAM_DOMAIN: `https://${team}/cdn-cgi/access/certs` }, fetcher), { id: 'user-1', email: 'partner@example.test' }, 'URL JWKS complète');
 assert.equal(await verifyAccessToken('pas.un.jeton', env, fetcher), null);
+assert.deepEqual(await verifyAccessToken(await sign(good), { ...env, ACCESS_AUD: 'autre-app, aud-test' }, fetcher),
+  { id: 'user-1', email: 'partner@example.test' }, 'plusieurs AUD');
+assert.equal(await verifyAccessToken(await sign(good), { ...env, ACCESS_AUD: 'autre-app, ,' }, fetcher), null, 'AUD absent de la liste');
 assert.equal(certCalls, 1, 'certificats mis en cache');
 
 // Les en-têtes d'identité envoyés par le navigateur sont toujours supprimés.
