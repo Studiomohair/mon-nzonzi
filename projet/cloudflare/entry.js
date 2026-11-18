@@ -7,7 +7,7 @@
 // (signature RS256, audience, émetteur, expiration).
 //
 // Variables à définir dans Cloudflare :
-//   ACCESS_TEAM_DOMAIN  ex. "mon-equipe.cloudflareaccess.com"
+//   ACCESS_TEAM_DOMAIN  ex. "mon-equipe.cloudflareaccess.com" (ou l'URL « JWKS » complète)
 //   ACCESS_AUD          « Application Audience (AUD) Tag » de l'application Access
 //   NZOZI_ALLOWED_EMAILS adresses des partenaires autorisés, séparées par des virgules
 import worker from '../dist/server/index.js';
@@ -41,7 +41,8 @@ async function accessKeys(teamDomain, fetcher) {
 }
 
 export async function verifyAccessToken(token, env, fetcher = fetch) {
-  const teamDomain = (env.ACCESS_TEAM_DOMAIN || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  // Accepte « equipe.cloudflareaccess.com » ou l'URL JWKS complète copiée depuis le tableau de bord.
+  const teamDomain = (env.ACCESS_TEAM_DOMAIN || '').trim().replace(/^https?:\/\//, '').split('/')[0];
   const audience = (env.ACCESS_AUD || '').trim();
   if (!token || !teamDomain || !audience) return null;
   const parts = token.split('.');
