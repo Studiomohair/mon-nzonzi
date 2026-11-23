@@ -12,4 +12,6 @@ const els=new Map();for(const id of ['net','calc-error','net-value','total-value
 vm.runInNewContext(script,{Intl,document:{getElementById:id=>els.get(id),querySelectorAll:()=>[]}});
 for(const [value,total,fee] of [['170','200,00','30,00'],['255','300,00','45,00'],['340','400,00','60,00'],['300','352,94','52,94'],['1','1,18','0,18']]){els.get('net').value=value;els.get('net').update();assert.ok(els.get('total-value').textContent.includes(total));assert.ok(els.get('fee-value').textContent.includes(fee));}
 for(const value of ['','-1','0','1.001','100001','bad']){els.get('net').value=value;els.get('net').update();assert.equal(els.get('calc-error').hidden,false);assert.equal(els.get('total-value').textContent,'—');}
-console.log('Accès serveur, absence du simulateur côté familles, calculs et montants invalides : OK.');
+const noBucket=await (await worker.fetch(req('/partenaire','partner@example.test','partner'),env)).text();assert.match(noBucket,/<div id="photo-block" hidden style="display:none;/);
+const withBucket=await (await worker.fetch(req('/partenaire','partner@example.test','partner'),{...env,BUCKET:{}})).text();assert.match(withBucket,/<div id="photo-block" style="display:flex;/);
+console.log('Photo masquée sans stockage, accès serveur, absence du simulateur côté familles, calculs et montants invalides : OK.');
