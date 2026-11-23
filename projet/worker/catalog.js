@@ -26,8 +26,39 @@ const demoProfiles = [
 ];
 
 // Les profils fictifs ne s'affichent que si SHOW_DEMO_PROFILES vaut "true" (tests, démonstration).
-function listedProfiles(env) {
-  return env?.SHOW_DEMO_PROFILES === 'true' ? demoProfiles : [];
+// Les vrais profils n'apparaissent qu'après validation (colonne published_json).
+async function listedProfiles(env) {
+  const demo = env?.SHOW_DEMO_PROFILES === 'true' ? demoProfiles : [];
+  return [...demo, ...await publishedProfiles(env)];
+}
+async function publishedProfiles(env) {
+  if (!env?.DB) return [];
+  try {
+    const { results } = await env.DB.prepare('SELECT slug, published_json FROM nzozi_profiles WHERE published_json IS NOT NULL AND slug IS NOT NULL ORDER BY reviewed_at DESC LIMIT 500').bind().all();
+    return results.map(row => publicProfile(row.slug, JSON.parse(row.published_json)));
+  } catch {
+    return [];
+  }
+}
+const splitList = (value, pattern) => String(value || '').split(pattern).map(item => item.trim()).filter(Boolean);
+const capitalize = value => value.charAt(0).toUpperCase() + value.slice(1);
+// Seules ces informations sont publiques : jamais l'email ni le téléphone.
+function publicProfile(slug, data) {
+  const bio = String(data.bio || '').trim();
+  return {
+    slug, real: true,
+    name: [data.firstName, data.lastName].filter(Boolean).join(' '),
+    city: data.city || '', region: data.region || '',
+    community: String(data.community || '').trim(),
+    languages: splitList(data.languages, /[,;/]+/).map(capitalize),
+    net: Number(data.rate),
+    summary: bio.length > 180 ? bio.slice(0, 180).replace(/\s+\S*$/, '') + '…' : bio,
+    bio,
+    services: splitList(data.services, /\n+|;/),
+    travel: data.travelArea || 'Déplacements à convenir',
+    experience: data.experience || '', traditions: data.traditions || '',
+    duration: data.duration || '', conditions: data.conditions || '',
+  };
 }
 
 const siteAssets = /* SITE_ASSETS */ {};
@@ -66,7 +97,7 @@ function filterState(params, regions, profiles) {
   return {
     q: (params.get('q') || '').trim().slice(0, 100),
     region: regions.includes(region) ? region : '',
-    communaute: profiles.some(profile => profile.community === community) ? community : '',
+    communaute: community && profiles.some(profile => profile.community === community) ? community : '',
   };
 }
 function filterQuery(filters) {
@@ -116,7 +147,7 @@ const motionScene = `<svg class="motion-scene" viewBox="0 0 620 500" fill="none"
 </svg>`;
 
 function profileMotion(profile) {
-  const initials = profile.name.split(' ').map(word => word[0]).join('');
+  const initials = profile.name.split(/\s+/).filter(Boolean).map(word => word[0]).join('').slice(0, 3);
   return `<div class="profile-motion" data-motion-profile="${profile.slug}" aria-hidden="true">
     <svg viewBox="0 0 340 210" fill="none" focusable="false" preserveAspectRatio="xMidYMid slice">
       <g class="motion-orbits" stroke="currentColor" stroke-width="1.2">
@@ -395,7 +426,7 @@ export function applySiteTheme(html) {
       '<div class="art">' + motionScene + '<div class="art-caption">');
 }
 
-function layout(title, main) {
+function layout(title, main, demoNotice = false) {
   return `<!doctype html>
 <html lang="fr">
 <head>
@@ -407,7 +438,7 @@ function layout(title, main) {
 </head>
 <body>
 <a href="#main" class="skip btn">Aller au contenu</a>
-<div class="private"><div class="shell"><span>${icon('lock')} Prototype privé</span><span>Les profils et demandes sont fictifs</span></div></div>
+${demoNotice ? `<div class="private"><div class="shell"><span>${icon('lock')} Prototype privé</span><span>Les profils et demandes sont fictifs</span></div></div>` : ''}
 <header class="site-header"><nav class="shell" aria-label="Navigation principale">
   <a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo()}</a>
   <div class="nav-links">
@@ -429,9 +460,9 @@ function location(profile) {
 }
 function card(profile, query) {
   return `<article class="card" data-profile="${profile.slug}">
-    <div class="card-image">${profileMotion(profile)}<span class="badge">Profil de démo</span></div>
+    <div class="card-image">${profileMotion(profile)}${profile.real ? '' : '<span class="badge">Profil de démo</span>'}</div>
     <div class="card-content"><h3>${escapeHtml(profile.name)}</h3>${location(profile)}
-    ${pills([profile.community, ...profile.languages])}
+    ${pills([profile.community, ...profile.languages].filter(Boolean))}
     <p>${escapeHtml(profile.summary)}</p>
     <div class="card-bottom"><div><strong class="price">${profilePrice(profile)}</strong><small>Commission incluse</small></div>
     <a class="btn secondary" aria-label="Voir le profil de ${escapeHtml(profile.name)}" href="/nzonzi/${profile.slug}${query}">Voir le profil ${icon('arrow')}</a></div></div>
@@ -446,7 +477,7 @@ function directoryPage(filters, regions, profiles) {
       && words.every(word => searchable.includes(word));
   });
   const query = filterQuery(filters);
-  const communities = [...new Set(profiles.map(profile => profile.community))].sort();
+  const communities = [...new Set(profiles.map(profile => profile.community).filter(Boolean))].sort();
   return layout('Trouver un nzonzi pour votre cérémonie de dot', `<main id="main">
 <section class="hero" aria-labelledby="hero-title"><div class="shell">
   <div class="hero-copy"><p class="kicker">Deux familles, une rencontre</p>
@@ -471,7 +502,7 @@ function directoryPage(filters, regions, profiles) {
   </script>
 </div></section>
 <section class="directory" id="nzonzi" aria-labelledby="directory-title"><div class="shell">
-  <div class="section-heading"><div><p class="kicker">Le répertoire</p><h2 id="directory-title">Rencontrez les nzonzi</h2></div><p>Comparez les langues, les prestations et le tarif total de chaque profil de démonstration.</p></div>
+  <div class="section-heading"><div><p class="kicker">Le répertoire</p><h2 id="directory-title">Rencontrez les nzonzi</h2></div><p>Comparez les langues, les prestations et le tarif total de chaque nzonzi.</p></div>
   <form class="filters" role="search" action="/#nzonzi" method="get" aria-label="Rechercher un nzonzi">
     <label class="field field-search">Mot-clé<span class="searchbox">${icon('search')}<input name="q" type="search" maxlength="100" placeholder="Nom, ville ou langue" value="${escapeHtml(q)}"></span></label>
     <label class="field">Région<select name="region"><option value="">Toutes les régions</option>${options(regions, region)}</select></label>
@@ -489,7 +520,24 @@ function directoryPage(filters, regions, profiles) {
     <article><strong>03</strong><h3>Testez la prise de contact</h3><p>Envoyez une demande fictive et retrouvez-la dans l’espace nzonzi de démonstration.</p></article>
   </div>
 </div></section>
-</main>`);
+</main>`, profiles.some(profile => !profile.real));
+}
+
+function realContact(profile) {
+  return `<section class="panel contact" id="contact" aria-labelledby="contact-title">
+        <p class="kicker">Tarif de la prestation</p><strong class="price">${profilePrice(profile)}</strong>
+        <p>Commission incluse.${profile.duration ? ' Durée incluse : ' + escapeHtml(profile.duration) + '.' : ''} Déplacements à convenir.</p>
+        <h2 id="contact-title">Contacter ${escapeHtml(profile.name)}</h2>
+        <p class="muted">Les demandes de mise en relation ouvrent très prochainement sur Mon Nzonzi.</p>
+      </section>`;
+}
+function realDetails(profile) {
+  const block = (title, value) => value ? `<h3>${title}</h3><p>${escapeHtml(value)}</p>` : '';
+  return `${profile.services.length ? `<h3>Prestations</h3><ul>${profile.services.map(service => `<li>${escapeHtml(service)}</li>`).join('')}</ul>` : ''}
+        ${block('Coutumes maîtrisées', profile.traditions)}
+        ${block('Expérience', profile.experience ? profile.experience + (profile.experience === '1' ? ' an' : ' ans') : '')}
+        <h3>Zone de déplacement</h3><p>${escapeHtml(profile.travel)}</p>
+        ${block('Déplacements et conditions', profile.conditions)}`;
 }
 
 function profilePage(profile, query, state = {}) {
@@ -502,15 +550,15 @@ function profilePage(profile, query, state = {}) {
     <a class="back" href="/${query}#nzonzi">${icon('back')} Retour aux profils</a>
     <section class="panel profile-head" aria-labelledby="profile-name">
       <div>${profileMotion(profile)}</div>
-      <div class="profile-intro"><span class="badge">Profil de démonstration</span><h1 id="profile-name">${escapeHtml(profile.name)}</h1>
-      ${location(profile)}${pills([profile.community, ...profile.languages])}<p class="lead">${escapeHtml(profile.summary)}</p></div>
+      <div class="profile-intro">${profile.real ? '' : '<span class="badge">Profil de démonstration</span>'}<h1 id="profile-name">${escapeHtml(profile.name)}</h1>
+      ${location(profile)}${pills([profile.community, ...profile.languages].filter(Boolean))}<p class="lead">${escapeHtml(profile.summary)}</p></div>
     </section>
     <div class="profile-layout">
       <section class="panel details"><h2>À propos</h2><p>${escapeHtml(profile.bio)}</p>
-        <h3>Prestations</h3><ul>${profile.services.map(service => `<li>${escapeHtml(service)}</li>`).join('')}</ul>
-        <h3>Zone de déplacement</h3><p>${escapeHtml(profile.travel)}</p>
+        ${profile.real ? realDetails(profile) : `<h3>Prestations</h3><ul>${profile.services.map(service => `<li>${escapeHtml(service)}</li>`).join('')}</ul>
+        <h3>Zone de déplacement</h3><p>${escapeHtml(profile.travel)}</p>`}
       </section>
-      <section class="panel contact" id="contact" aria-labelledby="contact-title">
+      ${profile.real ? realContact(profile) : `<section class="panel contact" id="contact" aria-labelledby="contact-title">
         <p class="kicker">Tarif de la prestation</p><strong class="price">${profilePrice(profile)}</strong>
         <p>Commission incluse. Déplacements à convenir.</p>
         ${feedback}
@@ -526,14 +574,14 @@ function profilePage(profile, query, state = {}) {
 ${escapeHtml(values.message || '')}</textarea></label>
           <button class="btn" type="submit">Enregistrer la demande ${icon('arrow')}</button>
         </form>
-      </section>
+      </section>`}
     </div>
-  </div></main>`);
+  </div></main>`, !profile.real);
 }
 
 async function saveDemoRequest(request, env, profile, query) {
   const userId = request.headers.get('oai-authenticated-user-id');
-  if (!userId) return catalogResponse(profilePage(profile, query, { error: 'Connectez-vous à votre compte ChatGPT pour enregistrer une demande.' }), 401);
+  if (!userId) return catalogResponse(profilePage(profile, query, { error: 'Connectez-vous pour enregistrer une demande de démonstration.' }), 401);
   if (request.headers.get('Origin') !== new URL(request.url).origin) return catalogResponse(profilePage(profile, query, { error: 'Origine de la demande non autorisée.' }), 403);
   const type = request.headers.get('Content-Type') || '';
   if (!type.startsWith('application/x-www-form-urlencoded')) return new Response(null, { status: 415, headers: catalogHeaders });
@@ -587,17 +635,17 @@ export async function catalog(request, env, regions) {
       headers: { ...catalogHeaders, 'Content-Type': type },
     });
   }
-  const profiles = listedProfiles(env);
+  if (pathname !== '/' && pathname !== '/index.html' && !pathname.startsWith('/nzonzi/')) return null;
+  const profiles = await listedProfiles(env);
   const filters = filterState(url.searchParams, regions, profiles);
   if (pathname === '/' || pathname === '/index.html') {
     if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
     return catalogResponse(request.method === 'HEAD' ? null : directoryPage(filters, regions, profiles));
   }
-  if (!pathname.startsWith('/nzonzi/')) return null;
   const profile = profiles.find(entry => pathname === '/nzonzi/' + entry.slug);
   if (!profile) return catalogResponse(request.method === 'HEAD' ? null : layout('Profil introuvable', '<main class="profile" id="main"><div class="shell"><h1>Profil introuvable</h1><a class="back" href="/#nzonzi">Retour aux profils</a></div></main>'), 404);
   const query = filterQuery(filters);
-  if (request.method === 'POST') return saveDemoRequest(request, env, profile, query);
+  if (request.method === 'POST' && !profile.real) return saveDemoRequest(request, env, profile, query);
   if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
   if (request.method === 'HEAD') return catalogResponse(null);
   const reference = url.searchParams.get('demande') || '';
@@ -611,4 +659,89 @@ export async function catalog(request, env, regions) {
     }
   }
   return catalogResponse(profilePage(profile, query, { receipt }));
+}
+
+// Page d'administration : liste des profils et validation avant publication.
+// Le contenu est inséré avec textContent côté navigateur (aucun HTML venant des profils).
+export function adminPage() {
+  return layout('Validation des profils', `<main class="profile admin" id="main"><div class="shell">
+  <p class="kicker">Administration</p>
+  <h1>Validation des profils nzonzi</h1>
+  <p class="lead">Un profil n’apparaît dans l’annuaire qu’après votre validation. Quand un nzonzi modifie un profil déjà publié, l’ancienne version reste en ligne jusqu’à votre nouvelle validation.</p>
+  <p id="admin-status" class="muted" role="status" aria-live="polite">Chargement des profils…</p>
+  <section aria-labelledby="pending-title"><h2 id="pending-title">À valider</h2><div id="list-pending" class="admin-list"></div></section>
+  <section aria-labelledby="approved-title"><h2 id="approved-title">Publiés</h2><div id="list-approved" class="admin-list"></div></section>
+  <section aria-labelledby="rejected-title"><h2 id="rejected-title">Refusés ou retirés</h2><div id="list-rejected" class="admin-list"></div></section>
+</div></main>
+<style>
+.admin h1{margin:14px 0 10px}.admin section{margin-top:34px}.admin h2{margin-bottom:14px}
+.admin-list{display:grid;gap:16px}.admin-card{padding:clamp(18px,3vw,28px)}
+.admin-card dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:14px 0}.admin-card dt{color:var(--muted);font-size:13px}.admin-card dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.admin-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.admin-state{font-size:13px;font-weight:650;color:var(--brown)}
+@media(max-width:640px){.admin-card dl{grid-template-columns:1fr}.admin-card dt{margin-top:6px}}
+</style>
+<script>
+const statusEl = document.getElementById('admin-status');
+const euro = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
+const labels = {
+  pending: p => p.published ? 'Modifications à valider · l’ancienne version reste en ligne' : 'Nouveau profil à valider',
+  approved: () => 'Publié dans l’annuaire',
+  rejected: p => p.published ? 'Modifications refusées · la version précédente reste en ligne' : 'Non publié',
+};
+const fields = [
+  ['Email de connexion', p => p.email], ['Email de contact', p => p.profile.contactEmail], ['Téléphone', p => p.profile.phone],
+  ['Ville', p => p.profile.city], ['Région', p => p.profile.region], ['Zone de déplacement', p => p.profile.travelArea],
+  ['Langues', p => p.profile.languages], ['Communauté déclarée', p => p.profile.community], ['Coutumes', p => p.profile.traditions],
+  ['Expérience', p => p.profile.experience ? p.profile.experience + ' an(s)' : ''], ['Présentation', p => p.profile.bio],
+  ['Prestations', p => p.profile.services],
+  ['Rémunération', p => Number(p.profile.rate) > 0 ? euro.format(Number(p.profile.rate)) + ' (prix famille : ' + euro.format(Math.round(Number(p.profile.rate) * 100 / 0.85) / 100) + ')' : ''],
+  ['Durée incluse', p => p.profile.duration], ['Conditions', p => p.profile.conditions],
+  ['Mis à jour le', p => new Date(p.updatedAt).toLocaleString('fr-FR')],
+];
+function el(tag, text, className) { const node = document.createElement(tag); if (text) node.textContent = text; if (className) node.className = className; return node; }
+function render(profiles) {
+  for (const key of ['pending', 'approved', 'rejected']) {
+    const list = document.getElementById('list-' + key);
+    const items = profiles.filter(p => p.status === key);
+    list.replaceChildren(...(items.length ? items.map(card) : [el('p', 'Aucun profil.', 'muted')]));
+  }
+}
+function card(p) {
+  const article = el('article', '', 'panel admin-card');
+  article.append(el('span', labels[p.status](p), 'admin-state'), el('h3', [p.profile.firstName, p.profile.lastName].join(' ')));
+  const dl = document.createElement('dl');
+  for (const [label, read] of fields) { const value = read(p); if (value) dl.append(el('dt', label), el('dd', value)); }
+  article.append(dl);
+  const actions = el('div', '', 'admin-actions');
+  const button = (text, action, secondary) => { const b = el('button', text, secondary ? 'btn secondary' : 'btn'); b.type = 'button'; b.onclick = () => act(p, action, b); actions.append(b); };
+  if (p.status !== 'approved') button(p.published ? 'Valider les modifications' : 'Valider et publier', 'approve');
+  if (p.status === 'pending') button(p.published ? 'Refuser les modifications' : 'Refuser', 'reject', true);
+  if (p.published) button('Retirer de l’annuaire', 'unpublish', true);
+  if (p.published && p.slug) { const link = el('a', 'Voir la fiche publique', 'btn secondary'); link.href = '/nzonzi/' + p.slug; link.target = '_blank'; actions.append(link); }
+  article.append(actions);
+  return article;
+}
+async function act(p, action, button) {
+  if (action === 'unpublish' && !confirmRemoval(p)) return;
+  button.disabled = true; statusEl.textContent = 'Enregistrement…';
+  try {
+    const r = await fetch('/api/admin/profils', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: p.userId, action, updatedAt: p.updatedAt }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Action impossible.');
+    await load('Action enregistrée.');
+  } catch (error) { statusEl.textContent = error.message; button.disabled = false; }
+}
+function confirmRemoval(p) { return window.confirm('Retirer ' + p.profile.firstName + ' ' + p.profile.lastName + ' de l’annuaire ?'); }
+async function load(message) {
+  try {
+    const r = await fetch('/api/admin/profils', { cache: 'no-store' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Chargement impossible.');
+    render(data.profiles);
+    const pending = data.profiles.filter(p => p.status === 'pending').length;
+    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.';
+  } catch (error) { statusEl.textContent = error.message || 'Chargement impossible. Rechargez la page.'; }
+}
+load();
+</script>`);
 }

@@ -18,6 +18,8 @@ en option, un bucket R2 pour les photos (binding `BUCKET`).
    - `ACCESS_TEAM_DOMAIN` : ex. `mon-equipe.cloudflareaccess.com`, ou l'URL *JWKS* complète
    - `ACCESS_AUD` : l'AUD tag de l'application Access (plusieurs applications : AUD séparés par des virgules)
    - `NZOZI_ALLOWED_EMAILS` : adresses des partenaires autorisés, séparées par des virgules
+   - `NZOZI_ADMIN_EMAILS` : adresses qui peuvent valider les profils sur `/partenaire/admin`, séparées par des virgules
+   - `NZOZI_OPEN_SIGNUP` = `true` : tout email vérifié par Cloudflare Access peut créer un profil nzonzi (publié seulement après validation). Sans cette valeur, seule la liste `NZOZI_ALLOWED_EMAILS` a accès.
 
 Ensuite, chaque fusion sur `main` redéploie automatiquement le site.
 
@@ -33,3 +35,10 @@ bash scripts/build.sh
 for s in directory profile photo partner access; do node scripts/check-$s.mjs; done
 npx wrangler deploy --dry-run   # vérifie l'assemblage Cloudflare
 ```
+
+## Inscription des nzonzi et validation (étape 2)
+
+1. Application Access « Espace nzonzi » (chemins `/partenaire` et `/api`) : la politique doit autoriser tout le monde (Include → Everyone) avec la connexion par code email (One-time PIN). La sécurité de l'admin est assurée par `NZOZI_ADMIN_EMAILS`, vérifié côté serveur.
+2. Secrets du Worker : `NZOZI_ADMIN_EMAILS` (adresse de l'équipe) et `NZOZI_OPEN_SIGNUP` = `true`.
+3. La migration `0002_profile_validation.sql` est appliquée automatiquement par la commande de déploiement (`wrangler d1 migrations apply DB --remote`). Elle ajoute des colonnes sans supprimer de données.
+4. Page de validation : `https://mon-nzonzi.fr/partenaire/admin`.
