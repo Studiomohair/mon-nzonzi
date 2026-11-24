@@ -78,5 +78,9 @@ assert.equal(db.prepare('SELECT COUNT(*) AS count FROM demo_requests').get().cou
 const inbox = await html('/partenaire', owner);
 assert.match(inbox, /Saint-Ouen/);
 assert.match(inbox, /Demande fictive &lt;test&gt; \$&amp;/);
-assert.match(inbox, /id="net-slider"/);
+assert.match(inbox, /id="net"/);
+const outfit = await visit('/assets/outfit.woff2');
+assert.equal(outfit.headers.get('Content-Type'), 'font/woff2');
+assert.match(await html('/assets/outfit-license.txt'), /SIL Open Font License/);
+assert.match(home, /Vous êtes nzonzi/);
 console.log('Répertoire, filtres combinés, animations, police, tarif, demande, reçu, protection et boîte de démo : OK.');
