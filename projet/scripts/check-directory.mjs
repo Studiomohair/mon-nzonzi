@@ -83,4 +83,8 @@ const outfit = await visit('/assets/outfit.woff2');
 assert.equal(outfit.headers.get('Content-Type'), 'font/woff2');
 assert.match(await html('/assets/outfit-license.txt'), /SIL Open Font License/);
 assert.match(home, /Vous êtes nzonzi/);
+assert.match(home, /src="\/assets\/mon-nzonzi-clair\.webp"/);
+const favicon = await visit('/assets/favicon.png');
+assert.equal(favicon.headers.get('Content-Type'), 'image/png');
+assert.match(home, /rel="icon"/);
 console.log('Répertoire, filtres combinés, animations, police, tarif, demande, reçu, protection et boîte de démo : OK.');

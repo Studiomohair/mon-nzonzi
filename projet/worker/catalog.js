@@ -66,6 +66,8 @@ const siteAssetRoutes = new Map([
   ['/assets/mon-nzonzi.webp', ['mon-nzonzi.webp', 'image/webp']],
   ['/assets/playfair-display.woff2', ['playfair-display.woff2', 'font/woff2']],
   ['/assets/playfair-license.txt', ['playfair-license.txt', 'text/plain; charset=utf-8']],
+  ['/assets/mon-nzonzi-clair.webp', ['mon-nzonzi-clair.webp', 'image/webp']],
+  ['/assets/favicon.png', ['favicon.png', 'image/png']],
   ['/assets/outfit.woff2', ['outfit.woff2', 'font/woff2']],
   ['/assets/outfit-license.txt', ['outfit-license.txt', 'text/plain; charset=utf-8']],
 ]);
@@ -213,9 +215,11 @@ function catalogResponse(html, status = 200) {
   return new Response(html, { status, headers: { ...catalogHeaders, 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
-function brandLogo() {
-  return siteAssets['mon-nzonzi.webp']
-    ? '<img class="brand-logo" src="/assets/mon-nzonzi.webp" alt="Mon Nzonzi" width="680" height="100">'
+// Logo « Mon-Nzonzi.fr » (25/11/2026) : bordeaux sur fond clair, version claire pour les fonds foncés.
+function brandLogo(light = false) {
+  const file = light ? 'mon-nzonzi-clair.webp' : 'mon-nzonzi.webp';
+  return siteAssets[file]
+    ? `<img class="brand-logo" src="/assets/${file}" alt="Mon Nzonzi" width="463" height="57">`
     : 'Mon Nzonzi';
 }
 
@@ -234,9 +238,9 @@ const siteTheme = `
   --display:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
-.brand-logo{display:block;width:200px;max-width:100%;height:auto}
-footer .brand-logo{width:164px;padding:8px 10px;border-radius:10px;background:var(--blanc)}
-@media(max-width:720px){.brand-logo{width:150px}}
+.brand-logo{display:block;width:220px;max-width:100%;height:auto}
+footer .brand-logo{width:180px}
+@media(max-width:720px){.brand-logo{width:168px}footer .brand-logo{width:160px}}
 `;
 
 const catalogCss = siteTheme + motionCss + `
@@ -465,7 +469,8 @@ form,.empty,.calc,.metric,.result{border-radius:22px}
 export function applySiteTheme(html) {
   return html
     .replace('</style>', () => companionCss + '</style>')
-    .replaceAll('<!-- BRAND_LOGO -->', brandLogo)
+    .replace('</head>', () => '<link rel="icon" type="image/png" href="/assets/favicon.png"></head>')
+    .replaceAll('<!-- BRAND_LOGO -->', () => brandLogo())
     .replace(/<div class="art" role="img"[^>]*>[\s\S]*?<\/svg><div class="art-caption">/, () =>
       '<div class="art">' + motionScene + '<div class="art-caption">');
 }
@@ -484,6 +489,8 @@ function layout(title, main, options = {}) {
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#382D20">
 <title>${escapeHtml(title)} · Mon Nzonzi</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/favicon.png">
 <link rel="preload" href="/assets/outfit.woff2" as="font" type="font/woff2" crossorigin>
 <style>${catalogCss}</style>
 </head>
@@ -495,7 +502,7 @@ ${demo ? `<div class="private"><div class="shell"><span>${icon('lock')} Prototyp
   <div class="nav-links">${links}</div>
 </nav></header>
 ${main}
-<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo()}</a><span>Une parole qui rassemble.</span><a href="/partenaire">Espace nzonzi</a></div></footer>
+<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><a href="/partenaire">Espace nzonzi</a></div></footer>
 </body></html>`;
 }
 
