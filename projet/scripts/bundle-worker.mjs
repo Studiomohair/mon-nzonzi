@@ -5,7 +5,7 @@ const fromRoot = path => new URL(path, project);
 const assetDirectory = fromRoot('worker/assets/');
 const assets = {};
 for (const file of (await readdir(assetDirectory)).sort()) {
-  if (!/\.(webp|woff2|txt)$/.test(file)) continue;
+  if (!/\.(webp|woff2|txt|png)$/.test(file)) continue;
   assets[file] = (await readFile(new URL(file, assetDirectory))).toString('base64');
 }
 const catalog = await readFile(fromRoot('worker/catalog.js'), 'utf8');
