@@ -410,6 +410,7 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 .request{padding:clamp(18px,3vw,26px);margin-top:14px}
 .request-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px}
 .request .location{margin:6px 0 10px}
+.request-address{margin:-4px 0 10px 23px}
 .request-message{white-space:pre-wrap;overflow-wrap:anywhere}
 .request.unread{border-left:5px solid var(--bordeaux)}
 .request-read{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;color:var(--olive);font-weight:500;font-size:15px}
@@ -445,6 +446,7 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
   .profile{padding-top:16px}
   .join .btn{width:100%}
 }
+@media(max-width:480px){.venue-row{grid-template-columns:1fr}}
 @media(max-width:375px){.two-fields{grid-template-columns:1fr}.hero h1{font-size:38px}}
 `;
 
@@ -567,13 +569,37 @@ export function mailEnabled(env) {
 export function adminEmails(env) {
   return [...new Set(String(env?.NZOZI_ADMIN_EMAILS || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean))];
 }
-export async function sendMail(env, { to, subject, text, replyTo, bcc = [] }) {
+// Mise en page commune des emails (styles en ligne, compatibles messageries).
+const mailColors = { brun: '#382D20', bordeaux: '#8C3D20', olive: '#726B4F', fond: '#F6F4EF', carte: '#FFFDF8', ligne: '#DAD6CA' };
+export function mailButton(label, href, secondary = false) {
+  const style = secondary
+    ? `display:inline-block;padding:12px 22px;border-radius:999px;border:1px solid ${mailColors.brun};color:${mailColors.brun};text-decoration:none;font-weight:bold;font-size:15px`
+    : `display:inline-block;padding:13px 24px;border-radius:999px;background:${mailColors.bordeaux};color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px`;
+  return `<a href="${escapeHtml(href)}" style="${style}">${escapeHtml(label)}</a>`;
+}
+export function mailDetails(rows) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:18px 0;background:${mailColors.fond};border-radius:14px">`
+    + rows.filter(([, value]) => value).map(([label, value]) => `<tr><td style="padding:10px 16px;color:${mailColors.olive};font-size:13px;width:130px;vertical-align:top">${escapeHtml(label)}</td><td style="padding:10px 16px;font-size:15px;color:${mailColors.brun};font-weight:bold">${escapeHtml(value)}</td></tr>`).join('')
+    + '</table>';
+}
+function mailLayout(inner) {
+  return `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:${mailColors.fond}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${mailColors.fond};padding:24px 12px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${mailColors.carte};border-radius:20px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:${mailColors.brun}">
+<tr><td style="background:${mailColors.bordeaux};padding:22px 28px;color:#ffffff;font-size:26px;font-weight:bold;letter-spacing:-0.5px">MonNzonzi</td></tr>
+<tr><td style="padding:28px;font-size:15px;line-height:1.6">${inner}</td></tr>
+<tr><td style="background:${mailColors.brun};padding:18px 28px;color:#D9D5C8;font-size:12px;line-height:1.5">Mon Nzonzi · Une parole qui rassemble.<br>mon-nzonzi.fr</td></tr>
+</table></td></tr></table></body></html>`;
+}
+function textToHtml(text) {
+  return text.split(/\n{2,}/).map(block => `<p style="margin:0 0 14px">${escapeHtml(block).replace(/\n/g, '<br>')}</p>`).join('');
+}
+export async function sendMail(env, { to, subject, text, html: inner, replyTo, bcc = [] }) {
   if (!mailEnabled(env)) return false;
   const recipients = [...new Set(to.map(email => email.trim().toLowerCase()).filter(Boolean))];
   if (!recipients.length) return false;
   const hidden = [...new Set(bcc.map(email => email.trim().toLowerCase()))].filter(email => email && !recipients.includes(email));
-  const html = '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#382D20">'
-    + escapeHtml(text).replace(/\n/g, '<br>') + '</div>';
+  const html = mailLayout(inner || textToHtml(text));
   const body = {
     sender: { name: 'Mon Nzonzi', email: env.BREVO_SENDER_EMAIL },
     to: recipients.map(email => ({ email })),
@@ -593,6 +619,12 @@ export async function sendMail(env, { to, subject, text, replyTo, bcc = [] }) {
   }
 }
 
+const VENUES = ['Salle de réception', 'Domicile familial', 'Autre lieu', 'Pas encore défini'];
+const ADDRESS_VENUES = ['Salle de réception', 'Domicile familial'];
+function venueLabel(venue, city) {
+  if (!venue || venue === 'Pas encore défini') return city + (venue ? ' (lieu pas encore défini)' : '');
+  return venue + ' · ' + city;
+}
 function contactForm(profile, url, state) {
   const values = state.values || {};
   const firstName = escapeHtml(profile.name.split(' ')[0]);
@@ -607,14 +639,30 @@ function contactForm(profile, url, state) {
             <label class="field">Votre email<input name="email" type="email" maxlength="200" autocomplete="email" required value="${escapeHtml(values.email || '')}"></label>
             <label class="field"><span>Téléphone <span class="optional">(facultatif)</span></span><input name="telephone" type="tel" maxlength="40" autocomplete="tel" value="${escapeHtml(values.phone || '')}"></label>
           </div>
-          <div class="two-fields">
+          <div class="two-fields venue-row">
             <label class="field">Ville de la cérémonie<input name="ville" maxlength="100" required value="${escapeHtml(values.city || '')}"></label>
-            <label class="field"><span>Date <span class="optional">(facultatif)</span></span><input type="date" name="date" value="${escapeHtml(values.date || '')}"></label>
+            <label class="field">Lieu<select name="lieu" required><option value="">Choisir</option>${options(VENUES, values.venue || '')}</select></label>
           </div>
+          <label class="field" id="address-field"${ADDRESS_VENUES.includes(values.venue) ? '' : ' hidden'}><span id="address-label">${values.venue === 'Domicile familial' ? 'Adresse du domicile' : 'Adresse de la salle'}</span><input name="adresse" maxlength="200" autocomplete="street-address" placeholder="Numéro, rue, code postal" value="${escapeHtml(values.address || '')}"></label>
+          <label class="field"><span>Date <span class="optional">(facultatif)</span></span><input type="date" name="date" value="${escapeHtml(values.date || '')}"></label>
           <label class="field">Votre message<textarea name="message" maxlength="2000" required placeholder="Présentez votre famille et votre projet de cérémonie.">${escapeHtml(values.message || '')}</textarea></label>
           <label class="check"><input type="checkbox" name="accord" value="oui" required${values.consent ? ' checked' : ''}><span>J’accepte que mes coordonnées et mon message soient transmis à ${firstName} et à l’équipe Mon Nzonzi. <a href="/confidentialite" target="_blank">En savoir plus</a></span></label>
           <button class="btn" type="submit">Envoyer ${icon('arrow')}</button>
-        </form>`;
+        </form>
+        <script>
+        (() => {
+          const venue = document.querySelector('select[name="lieu"]');
+          const field = document.getElementById('address-field');
+          const input = field.querySelector('input');
+          const label = document.getElementById('address-label');
+          const sync = () => {
+            const show = venue.value === 'Salle de réception' || venue.value === 'Domicile familial';
+            field.hidden = !show; input.required = show;
+            label.textContent = venue.value === 'Domicile familial' ? 'Adresse du domicile' : 'Adresse de la salle';
+          };
+          venue.addEventListener('change', sync); sync();
+        })();
+        </script>`;
 }
 
 function contactSection(profile, url, state, env) {
@@ -679,7 +727,7 @@ async function sendContactRequest(request, env, profile, query) {
   const values = {
     reference: safeId.test(reference) ? reference : undefined,
     name: get('nom', 100), email: get('email', 200), phone: get('telephone', 40),
-    city: get('ville', 100), date: get('date', 10), message: get('message', 2000),
+    city: get('ville', 100), venue: get('lieu', 40), address: get('adresse', 200), date: get('date', 10), message: get('message', 2000),
     consent: fields.get('accord') === 'oui',
   };
   const sentUrl = '/nzonzi/' + profile.slug + (query ? query.replace(/&amp;/g, '&') + '&' : '?') + 'envoye=1#contact';
@@ -690,6 +738,9 @@ async function sendContactRequest(request, env, profile, query) {
   const { date } = values;
   const validDate = !date || (/^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date);
   if (!values.reference || !values.name || !values.city || !values.message) return error('Complétez votre nom, la ville et votre message.');
+  if (!VENUES.includes(values.venue)) return error('Choisissez le lieu de la cérémonie.');
+  if (!ADDRESS_VENUES.includes(values.venue)) values.address = '';
+  else if (!values.address) return error(values.venue === 'Domicile familial' ? 'Indiquez l’adresse du domicile.' : 'Indiquez l’adresse de la salle.');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return error('Vérifiez votre adresse email.');
   if (!validDate) return error('Vérifiez la date de la cérémonie.');
   if (!values.consent) return error('Cochez la case pour accepter la transmission de votre demande.');
@@ -704,8 +755,8 @@ async function sendContactRequest(request, env, profile, query) {
       .bind(ipHash, new Date(now - 3600 * 1000).toISOString()).first();
     if (Number(recent?.count || 0) >= CONTACT_LIMIT_PER_HOUR) return show({ values, error: 'Trop de demandes envoyées. Réessayez dans une heure.' }, 429);
     await env.DB.prepare('DELETE FROM contact_requests WHERE created_at < ?').bind(new Date(now - CONTACT_RETENTION_MS).toISOString()).run();
-    const inserted = await env.DB.prepare("INSERT INTO contact_requests (reference, profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, ip_hash, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?) ON CONFLICT(reference) DO NOTHING")
-      .bind(values.reference, profile.slug, values.name, values.email, values.phone, values.city, values.date, values.message, ipHash, now.toISOString()).run();
+    const inserted = await env.DB.prepare("INSERT INTO contact_requests (reference, profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_venue, ceremony_address, ceremony_date, message, ip_hash, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?) ON CONFLICT(reference) DO NOTHING")
+      .bind(values.reference, profile.slug, values.name, values.email, values.phone, values.city, values.venue, values.address, values.date, values.message, ipHash, now.toISOString()).run();
     // Double clic ou rechargement : la demande est déjà partie.
     if (!changes(inserted)) return done();
     const firstName = profile.name.split(' ')[0];
@@ -717,7 +768,8 @@ async function sendContactRequest(request, env, profile, query) {
       `Nom : ${values.name}`,
       `Email : ${values.email}`,
       values.phone ? `Téléphone : ${values.phone}` : '',
-      `Ville de la cérémonie : ${values.city}`,
+      `Lieu de la cérémonie : ${venueLabel(values.venue, values.city)}`,
+      values.address ? `Adresse : ${values.address}` : '',
       values.date ? `Date : ${formatDate.format(new Date(values.date))}` : '',
       '',
       'Message :',
@@ -728,10 +780,25 @@ async function sendContactRequest(request, env, profile, query) {
       '',
       'L’équipe Mon Nzonzi',
     ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
+    const origin = new URL(request.url).origin;
+    const dateLabel = values.date ? formatDate.format(new Date(values.date)) : 'À définir';
+    const details = mailDetails([
+      ['Famille', values.name], ['Email', values.email], ['Téléphone', values.phone],
+      ['Ville', values.city], ['Lieu', values.venue], ['Adresse', values.address], ['Date', dateLabel],
+    ]);
+    const html = `<p style="margin:0 0 6px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:${mailColors.olive}">Nouvelle demande</p>
+<h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;font-weight:normal">Bonjour ${escapeHtml(firstName)}, <strong>une famille souhaite vous confier sa cérémonie de dot.</strong></h1>
+<p style="margin:0">${escapeHtml(values.name)} vous a écrit depuis votre fiche Mon Nzonzi.</p>
+${details}
+<p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Son message</p>
+<div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(values.message)}</div>
+<p style="margin:0 0 10px">${mailButton('Répondre à la famille', `mailto:${values.email}?subject=${encodeURIComponent('Votre demande sur Mon Nzonzi')}`)}</p>
+<p style="margin:0 0 22px">${mailButton('Confirmer la réception à la famille', origin + '/partenaire#demandes', true)}</p>
+<p style="margin:0;color:${mailColors.olive};font-size:13px">Vous pouvez aussi simplement répondre à cet email : votre réponse arrive directement chez la famille. En confirmant la réception depuis votre espace, la famille est rassurée.</p>`;
     const sent = await sendMail(env, {
       to: [to], bcc: adminEmails(env),
-      subject: `Nouvelle demande de ${values.name} · Mon Nzonzi`,
-      text, replyTo: { email: values.email, name: values.name },
+      subject: `Nouvelle demande de ${values.name} · ${values.city}`,
+      text, html, replyTo: { email: values.email, name: values.name },
     });
     await env.DB.prepare('UPDATE contact_requests SET status = ? WHERE reference = ?').bind(sent ? 'sent' : 'failed', values.reference).run();
     if (!sent) {
@@ -742,6 +809,12 @@ async function sendContactRequest(request, env, profile, query) {
     await sendMail(env, {
       to: [values.email],
       subject: `Votre demande a bien été transmise à ${firstName}`,
+      html: `<h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;font-weight:normal">Merci ${escapeHtml(values.name)}, <strong>votre demande est bien partie.</strong></h1>
+<p style="margin:0 0 6px">${escapeHtml(firstName)} l’a reçue par email et vous répondra directement${values.phone ? ' par email ou par téléphone' : ' par email'}. Vous recevrez aussi un message dès qu’il ou elle aura confirmé la réception.</p>
+${mailDetails([['Nzonzi', profile.name], ['Ville', values.city], ['Lieu', values.venue], ['Adresse', values.address], ['Date', dateLabel]])}
+<p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Votre message</p>
+<div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(values.message)}</div>
+<p style="margin:0">${mailButton('Revoir la fiche de ' + firstName, origin + '/nzonzi/' + profile.slug, true)}</p>`,
       text: [
         `Bonjour ${values.name},`,
         '',
@@ -749,7 +822,8 @@ async function sendContactRequest(request, env, profile, query) {
         'Vous recevrez aussi un email dès qu’il ou elle aura confirmé la réception de votre demande.',
         '',
         'Récapitulatif :',
-        `Ville de la cérémonie : ${values.city}`,
+        `Lieu de la cérémonie : ${venueLabel(values.venue, values.city)}`,
+        values.address ? `Adresse : ${values.address}` : '',
         values.date ? `Date : ${formatDate.format(new Date(values.date))}` : '',
         `Message : ${values.message}`,
         '',
@@ -813,7 +887,7 @@ const legalPages = {
   <p>${info('publisher', 'Nom ou raison sociale')}, ${info('address', 'Adresse')}. Contact : ${contactLink()}.</p>
   <h2>Les données que nous utilisons</h2>
   <ul>
-    <li><strong>Familles</strong> : nom, email, téléphone (facultatif), ville et date de la cérémonie, message. Elles servent uniquement à transmettre votre demande au nzonzi choisi.</li>
+    <li><strong>Familles</strong> : nom, email, téléphone (facultatif), ville, lieu, adresse (pour une salle ou un domicile) et date de la cérémonie, message. Elles servent uniquement à transmettre votre demande au nzonzi choisi.</li>
     <li><strong>Nzonzi</strong> : email de connexion, prénom, nom, email et téléphone de contact, ville, région, langues, présentation, prestations, tarif, conditions, communauté (facultative) et photo (facultative). Elles servent à créer, vérifier et publier votre fiche.</li>
     <li><strong>Données techniques</strong> : adresse IP et journaux techniques, utilisés pour la sécurité du site et contre les envois abusifs. L’adresse IP liée à une demande est conservée sous une forme non lisible (empreinte).</li>
   </ul>
@@ -967,7 +1041,7 @@ function renderRequests(requests) {
     if (isLate(r) || r.status === 'failed') article.classList.add('late');
     article.append(el('span', requestState(r), 'admin-state'), el('h3', r.name + ' → ' + r.slug));
     const dl = document.createElement('dl');
-    for (const [label, value] of [['Reçue le', new Date(r.createdAt).toLocaleString('fr-FR')], ['Email', r.email], ['Téléphone', r.phone], ['Ville', r.city], ['Date', r.date], ['Message', r.message]]) if (value) dl.append(el('dt', label), el('dd', value));
+    for (const [label, value] of [['Reçue le', new Date(r.createdAt).toLocaleString('fr-FR')], ['Email', r.email], ['Téléphone', r.phone], ['Ville', r.city], ['Lieu', r.venue], ['Adresse', r.address], ['Date', r.date], ['Message', r.message]]) if (value) dl.append(el('dt', label), el('dd', value));
     article.append(dl);
     return article;
   }) : [el('p', 'Aucune demande pour le moment.', 'muted')]));
@@ -1030,13 +1104,15 @@ function partnerRequests(requests) {
   if (!requests) return `<section class="inbox" id="demandes" aria-labelledby="requests-title">${intro}<p class="note">Les familles pourront vous contacter dès que votre fiche sera en ligne.</p></section>`;
   const items = requests.map(r => {
     const when = r.ceremony_date ? ' · le ' + formatDate.format(new Date(r.ceremony_date)) : '';
+    const place = r.ceremony_venue && r.ceremony_venue !== 'Pas encore défini' ? r.ceremony_venue + ' à ' + r.ceremony_city : r.ceremony_city + (r.ceremony_venue ? ' (lieu à définir)' : '');
     const email = escapeHtml(r.family_email);
     const phone = r.family_phone ? ` · <a class="link" href="tel:${escapeHtml(r.family_phone.replace(/[^+\d]/g, ''))}">${escapeHtml(r.family_phone)}</a>` : '';
     const read = r.read_at
       ? `<p class="request-read">Réception confirmée à la famille le ${formatDate.format(new Date(r.read_at))}</p>`
       : `<p class="request-read"><button type="button" class="btn secondary mark-read" data-ref="${escapeHtml(r.reference)}">Indiquer à la famille que j’ai reçu la demande</button><span class="note">La famille reçoit un email pour être rassurée.</span></p>`;
     return `<article class="request panel${r.read_at ? '' : ' unread'}"><div class="request-head"><h3>${escapeHtml(r.family_name)}</h3><span class="note">Reçue le ${formatDate.format(new Date(r.created_at))}</span></div>
-      <p class="location">${icon('pin')}Cérémonie à ${escapeHtml(r.ceremony_city)}${escapeHtml(when)}</p>
+      <p class="location">${icon('pin')}Cérémonie : ${escapeHtml(place)}${escapeHtml(when)}</p>
+      ${r.ceremony_address ? `<p class="note request-address">Adresse : ${escapeHtml(r.ceremony_address)}</p>` : ''}
       <p class="request-message">${escapeHtml(r.message)}</p>
       <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p>${read}</article>`;
   }).join('');

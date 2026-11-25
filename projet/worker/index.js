@@ -32,8 +32,8 @@ async function adminApi(request,env,url,ctx){
  try{
   if(request.method==='GET'){
    const {results}=await env.DB.prepare("SELECT user_id, email, status, profile_json, published_json IS NOT NULL AS published, slug, updated_at, reviewed_at FROM nzozi_profiles ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, updated_at DESC LIMIT 500").bind().all();
-   let requests=[];try{({results:requests}=await env.DB.prepare('SELECT profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, status, created_at, read_at FROM contact_requests ORDER BY created_at DESC LIMIT 50').bind().all());}catch{requests=[];}
-   return json({profiles:results.map(r=>({userId:r.user_id,email:r.email,status:r.status,profile:JSON.parse(r.profile_json),published:Boolean(r.published),slug:r.slug,updatedAt:r.updated_at,reviewedAt:r.reviewed_at})),requests:requests.map(r=>({slug:r.profile_slug,name:r.family_name,email:r.family_email,phone:r.family_phone,city:r.ceremony_city,date:r.ceremony_date,message:r.message,status:r.status,createdAt:r.created_at,readAt:r.read_at}))});
+   let requests=[];try{({results:requests}=await env.DB.prepare('SELECT profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_venue, ceremony_address, ceremony_date, message, status, created_at, read_at FROM contact_requests ORDER BY created_at DESC LIMIT 50').bind().all());}catch{requests=[];}
+   return json({profiles:results.map(r=>({userId:r.user_id,email:r.email,status:r.status,profile:JSON.parse(r.profile_json),published:Boolean(r.published),slug:r.slug,updatedAt:r.updated_at,reviewedAt:r.reviewed_at})),requests:requests.map(r=>({slug:r.profile_slug,name:r.family_name,email:r.family_email,phone:r.family_phone,city:r.ceremony_city,venue:r.ceremony_venue,address:r.ceremony_address,date:r.ceremony_date,message:r.message,status:r.status,createdAt:r.created_at,readAt:r.read_at}))});
   }
   if(request.method!=='POST')return json({error:'Méthode non autorisée.'},405);
   if(request.headers.get('Origin')!==url.origin)return json({error:'Origine non autorisée.'},403);
@@ -126,7 +126,7 @@ export default {async fetch(request,env,ctx){
   // Sans stockage R2 (binding BUCKET), le champ photo est masqué.
   // Demandes des familles reçues par ce nzonzi (via le slug de sa fiche), 12 derniers mois.
   let requests=null;
-  if(env.DB){try{const mine=await env.DB.prepare('SELECT slug FROM nzozi_profiles WHERE user_id = ?').bind(id).first();if(mine?.slug){({results:requests}=await env.DB.prepare("SELECT reference, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, created_at, read_at FROM contact_requests WHERE profile_slug = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 50").bind(mine.slug).all());}}catch{requests=null;}}
+  if(env.DB){try{const mine=await env.DB.prepare('SELECT slug FROM nzozi_profiles WHERE user_id = ?').bind(id).first();if(mine?.slug){({results:requests}=await env.DB.prepare("SELECT reference, family_name, family_email, family_phone, ceremony_city, ceremony_venue, ceremony_address, ceremony_date, message, created_at, read_at FROM contact_requests WHERE profile_slug = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 50").bind(mine.slug).all());}}catch{requests=null;}}
   return page(partnerPage({regions,photo:Boolean(env.BUCKET),requests}),200,true);
  }
  const catalogPage=await catalog(request,env,regions);
