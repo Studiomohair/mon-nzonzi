@@ -32,7 +32,7 @@ navigateur et ne le recrée qu'à partir d'un jeton Cloudflare Access vérifié
 ## Contrôles
 ```bash
 bash scripts/build.sh
-for s in directory profile photo partner access; do node scripts/check-$s.mjs; done
+for s in directory profile photo partner access admin contact; do node scripts/check-$s.mjs; done
 npx wrangler deploy --dry-run   # vérifie l'assemblage Cloudflare
 ```
 
@@ -42,3 +42,43 @@ npx wrangler deploy --dry-run   # vérifie l'assemblage Cloudflare
 2. Secrets du Worker : `NZOZI_ADMIN_EMAILS` (adresse de l'équipe) et `NZOZI_OPEN_SIGNUP` = `true`.
 3. La migration `0002_profile_validation.sql` est appliquée automatiquement par la commande de déploiement (`wrangler d1 migrations apply DB --remote`). Elle ajoute des colonnes sans supprimer de données.
 4. Page de validation : `https://mon-nzonzi.fr/partenaire/admin`.
+
+## Emails avec Brevo (étape 3)
+
+Le formulaire de contact des fiches et les emails automatiques passent par
+l'API transactionnelle de Brevo. **Tant que les deux secrets ci-dessous ne sont
+pas définis, rien n'est envoyé** : les fiches affichent « La prise de contact en
+ligne ouvre très bientôt » et le reste du site fonctionne normalement.
+
+Emails envoyés :
+- **Demande d'une famille** → au nzonzi (email de contact de sa fiche validée),
+  copie cachée aux adresses de `NZOZI_ADMIN_EMAILS`. Le bouton « Répondre » du
+  nzonzi écrit directement à la famille.
+- **Nouveau profil ou profil modifié à valider** → aux adresses de `NZOZI_ADMIN_EMAILS`
+  (une seule alerte tant que le profil attend la validation).
+- **Profil validé** → au nzonzi, avec le lien de sa fiche.
+
+Mise en place :
+1. Créer un compte sur brevo.com (offre gratuite : 300 emails par jour).
+2. Brevo → Paramètres → **Expéditeurs, domaines et IP dédiées** → Domaines →
+   ajouter `mon-nzonzi.fr`. Brevo affiche des enregistrements DNS (code Brevo,
+   DKIM, DMARC) : les ajouter dans Cloudflare → `mon-nzonzi.fr` → DNS → Records,
+   en mode « DNS only » (nuage gris), puis cliquer « Vérifier » dans Brevo.
+3. Brevo → Expéditeurs → ajouter l'adresse d'envoi, par exemple `contact@mon-nzonzi.fr`.
+4. Brevo → Paramètres → **Clés API et MCP** → Générer une clé API.
+5. Cloudflare → Worker `mon-nzonzi` → Settings → Variables and Secrets → ajouter,
+   en type **Secret** :
+   - `BREVO_API_KEY` : la clé API Brevo
+   - `BREVO_SENDER_EMAIL` : l'adresse d'envoi validée (ex. `contact@mon-nzonzi.fr`)
+6. La migration `0003_contact_requests.sql` (table des demandes des familles) est
+   appliquée automatiquement au déploiement.
+
+Les demandes sont aussi visibles sur `/partenaire/admin` (50 dernières), conservées
+12 mois puis purgées. Limite : 5 demandes par heure et par adresse IP.
+
+## Pages légales
+
+`/mentions-legales`, `/confidentialite` et `/cgu`, liées dans le pied de page.
+Les informations de l'éditeur (nom, statut, adresse, SIRET, email, directeur de
+la publication) se remplissent dans l'objet `legalInfo` de `worker/catalog.js` ;
+tant qu'elles sont vides, la page affiche « … à compléter ».
