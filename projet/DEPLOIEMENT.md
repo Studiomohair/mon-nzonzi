@@ -57,6 +57,10 @@ Emails envoyés :
 - **Nouveau profil ou profil modifié à valider** → aux adresses de `NZOZI_ADMIN_EMAILS`
   (une seule alerte tant que le profil attend la validation).
 - **Profil validé** → au nzonzi, avec le lien de sa fiche.
+- **Confirmation à la famille** → récapitulatif de sa demande, juste après l'envoi.
+- **Réception confirmée** → à la famille, quand le nzonzi clique « Indiquer à la famille que j’ai reçu la demande » dans
+  la section « Mes demandes » de son espace (une seule fois par demande). Dans l'admin,
+  les demandes sans confirmation de réception depuis plus de 48 h sont signalées.
 
 Mise en place :
 1. Créer un compte sur brevo.com (offre gratuite : 300 emails par jour).

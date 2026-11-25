@@ -32,8 +32,8 @@ async function adminApi(request,env,url,ctx){
  try{
   if(request.method==='GET'){
    const {results}=await env.DB.prepare("SELECT user_id, email, status, profile_json, published_json IS NOT NULL AS published, slug, updated_at, reviewed_at FROM nzozi_profiles ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, updated_at DESC LIMIT 500").bind().all();
-   let requests=[];try{({results:requests}=await env.DB.prepare('SELECT profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, status, created_at FROM contact_requests ORDER BY created_at DESC LIMIT 50').bind().all());}catch{requests=[];}
-   return json({profiles:results.map(r=>({userId:r.user_id,email:r.email,status:r.status,profile:JSON.parse(r.profile_json),published:Boolean(r.published),slug:r.slug,updatedAt:r.updated_at,reviewedAt:r.reviewed_at})),requests:requests.map(r=>({slug:r.profile_slug,name:r.family_name,email:r.family_email,phone:r.family_phone,city:r.ceremony_city,date:r.ceremony_date,message:r.message,status:r.status,createdAt:r.created_at}))});
+   let requests=[];try{({results:requests}=await env.DB.prepare('SELECT profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, status, created_at, read_at FROM contact_requests ORDER BY created_at DESC LIMIT 50').bind().all());}catch{requests=[];}
+   return json({profiles:results.map(r=>({userId:r.user_id,email:r.email,status:r.status,profile:JSON.parse(r.profile_json),published:Boolean(r.published),slug:r.slug,updatedAt:r.updated_at,reviewedAt:r.reviewed_at})),requests:requests.map(r=>({slug:r.profile_slug,name:r.family_name,email:r.family_email,phone:r.family_phone,city:r.ceremony_city,date:r.ceremony_date,message:r.message,status:r.status,createdAt:r.created_at,readAt:r.read_at}))});
   }
   if(request.method!=='POST')return json({error:'Méthode non autorisée.'},405);
   if(request.headers.get('Origin')!==url.origin)return json({error:'Origine non autorisée.'},403);
@@ -52,7 +52,7 @@ async function adminApi(request,env,url,ctx){
  }catch{return json({error:'Action impossible pour le moment. Réessayez.'},503);}
 }
 export default {async fetch(request,env,ctx){
- const url=new URL(request.url);const photo=url.pathname==='/api/photo';const api=url.pathname==='/api/profil';const partner=url.pathname==='/partenaire'||url.pathname==='/partenaire/';
+ const url=new URL(request.url);const readApi=url.pathname==='/api/demandes';const photo=url.pathname==='/api/photo';const api=url.pathname==='/api/profil';const partner=url.pathname==='/partenaire'||url.pathname==='/partenaire/';
  const adminView=url.pathname==='/partenaire/admin';const adminApiPath=url.pathname==='/api/admin/profils';
  if(adminView||adminApiPath){
   const id=request.headers.get('oai-authenticated-user-id');const email=(request.headers.get('oai-authenticated-user-email')||'').trim().toLowerCase();
@@ -62,11 +62,11 @@ export default {async fetch(request,env,ctx){
   if(!['GET','HEAD'].includes(request.method))return new Response('Méthode non autorisée',{status:405});
   return page(request.method==='HEAD'?null:adminPage(),200,true);
  }
- if(api||partner||photo){
+ if(api||partner||photo||readApi){
   const id=request.headers.get('oai-authenticated-user-id');const email=(request.headers.get('oai-authenticated-user-email')||'').trim().toLowerCase();
-  if(!id||!email)return (api||photo)?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
+  if(!id||!email)return (api||photo||readApi)?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
   // NZOZI_OPEN_SIGNUP="true" : tout email vérifié par Cloudflare Access peut créer un profil (publié seulement après validation).
-  if(env.NZOZI_OPEN_SIGNUP!=='true'&&!emailSet(env.NZOZI_ALLOWED_EMAILS).has(email))return (api||photo)?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
+  if(env.NZOZI_OPEN_SIGNUP!=='true'&&!emailSet(env.NZOZI_ALLOWED_EMAILS).has(email))return (api||photo||readApi)?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
 
   if(photo){
    if(!['GET','PUT','DELETE'].includes(request.method))return json({error:'Méthode non autorisée.'},405);
@@ -84,6 +84,26 @@ export default {async fetch(request,env,ctx){
     if(!valid)return json({error:'Le fichier ne correspond pas à une image autorisée.'},400);
     await env.BUCKET.put(key,bytes,{httpMetadata:{contentType:type}});return json({saved:true});
    }catch{return json({error:'Impossible de sauvegarder la photo.'},503);}
+  }
+  // Le nzonzi confirme avoir reçu une demande : la famille est prévenue par email (une seule fois).
+  if(readApi){
+   if(request.method!=='POST')return json({error:'Méthode non autorisée.'},405);
+   if(!env.DB)return json({error:'Service indisponible.'},503);
+   if(request.headers.get('Origin')!==url.origin)return json({error:'Origine non autorisée.'},403);
+   if(!(request.headers.get('Content-Type')||'').startsWith('application/json'))return json({error:'Format non autorisé.'},415);
+   const body=await request.text();if(body.length>500)return json({error:'Requête trop volumineuse.'},413);
+   let reference;try{({reference}=JSON.parse(body));}catch{return json({error:'Requête invalide.'},400);}
+   if(typeof reference!=='string'||!reference||reference.length>100)return json({error:'Requête invalide.'},400);
+   try{
+    const row=await env.DB.prepare("SELECT c.family_name, c.family_email, c.read_at, p.published_json, p.profile_json, p.slug FROM contact_requests c JOIN nzozi_profiles p ON p.slug = c.profile_slug WHERE c.reference = ? AND p.user_id = ? AND c.status != 'pending'").bind(reference,id).first();
+    if(!row)return json({error:'Demande introuvable.'},404);
+    if(row.read_at)return json({readAt:row.read_at});
+    const readAt=new Date().toISOString();
+    await env.DB.prepare('UPDATE contact_requests SET read_at = ? WHERE reference = ? AND read_at IS NULL').bind(readAt,reference).run();
+    const nz=JSON.parse(row.published_json||row.profile_json);
+    await background(ctx,sendMail(env,{to:[row.family_email],subject:nz.firstName+' a bien reçu votre demande',text:'Bonjour '+row.family_name+',\n\n'+nz.firstName+' '+nz.lastName+' a bien reçu votre demande envoyée via Mon Nzonzi et va vous répondre directement.\n\nSa fiche : '+url.origin+'/nzonzi/'+row.slug+'\n\nL’équipe Mon Nzonzi'}));
+    return json({readAt});
+   }catch{return json({error:'Action impossible pour le moment. Réessayez.'},503);}
   }
   if(api){
    if(!['GET','PUT'].includes(request.method))return json({error:'Méthode non autorisée.'},405);
@@ -104,7 +124,10 @@ export default {async fetch(request,env,ctx){
   if(!['GET','HEAD'].includes(request.method))return new Response('Méthode non autorisée',{status:405});
   if(request.method==='HEAD')return page(null,200,true);
   // Sans stockage R2 (binding BUCKET), le champ photo est masqué.
-  return page(partnerPage({regions,photo:Boolean(env.BUCKET)}),200,true);
+  // Demandes des familles reçues par ce nzonzi (via le slug de sa fiche), 12 derniers mois.
+  let requests=null;
+  if(env.DB){try{const mine=await env.DB.prepare('SELECT slug FROM nzozi_profiles WHERE user_id = ?').bind(id).first();if(mine?.slug){({results:requests}=await env.DB.prepare("SELECT reference, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, created_at, read_at FROM contact_requests WHERE profile_slug = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 50").bind(mine.slug).all());}}catch{requests=null;}}
+  return page(partnerPage({regions,photo:Boolean(env.BUCKET),requests}),200,true);
  }
  const catalogPage=await catalog(request,env,regions);
  if(catalogPage)return catalogPage;
