@@ -133,7 +133,7 @@ assert.match(inbox, /12 juin 2027/);
 assert.doesNotMatch(inbox, /x@x\.x/);
 assert.match(inbox, new RegExp('data-ref="' + form.reference + '"'));
 
-// « J'ai lu cette demande » : la famille est prévenue une seule fois ; un autre nzonzi ne peut pas.
+// « Indiquer à la famille que j'ai reçu la demande » : la famille est prévenue une seule fois ; un autre nzonzi ne peut pas.
 const markRead = (id, reference, from = origin) => worker.fetch(new Request(origin + '/api/demandes', { method: 'POST', headers: { ...who(id), Origin: from, 'Content-Type': 'application/json' }, body: JSON.stringify({ reference }) }), env);
 sent.length = 0;
 assert.equal((await markRead('nzonzi', form.reference, 'https://pirate.example')).status, 403);
@@ -146,16 +146,16 @@ assert.equal(read.status, 200);
 assert.ok((await read.json()).readAt);
 assert.equal(sent.length, 1);
 assert.deepEqual(sent[0].to, [{ email: 'famille@example.test' }]);
-assert.match(sent[0].subject, /Élodie a bien lu votre demande/);
+assert.match(sent[0].subject, /Élodie a bien reçu votre demande/);
 assert.equal((await markRead('nzonzi', form.reference)).status, 200);
 assert.equal(sent.length, 1);
-assert.match(await space('nzonzi'), /Lue le .* la famille a été prévenue/);
+assert.match(await space('nzonzi'), /Réception confirmée à la famille le /);
 // Admin : lue, ou en retard après 48 h sans lecture.
 db.prepare("UPDATE contact_requests SET created_at = '2026-01-01T00:00:00.000Z' WHERE reference != ? AND status = 'sent'").run(form.reference);
 const adminView = (await (await api('/api/admin/profils', 'admin')).json()).requests;
 assert.ok(adminView.find(r => r.readAt));
 assert.ok(adminView.some(r => !r.readAt && r.status === 'sent'));
-assert.match(await (await api('/partenaire/admin', 'admin')).text(), /Non lue depuis plus de 48 h/);
+assert.match(await (await api('/partenaire/admin', 'admin')).text(), /Réception non confirmée depuis plus de 48 h/);
 
 const other = await space('autre');
 assert.doesNotMatch(other, /Famille Mbemba/);

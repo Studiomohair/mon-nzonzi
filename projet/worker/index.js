@@ -85,7 +85,7 @@ export default {async fetch(request,env,ctx){
     await env.BUCKET.put(key,bytes,{httpMetadata:{contentType:type}});return json({saved:true});
    }catch{return json({error:'Impossible de sauvegarder la photo.'},503);}
   }
-  // Le nzonzi indique avoir lu une demande : la famille est prévenue par email (une seule fois).
+  // Le nzonzi confirme avoir reçu une demande : la famille est prévenue par email (une seule fois).
   if(readApi){
    if(request.method!=='POST')return json({error:'Méthode non autorisée.'},405);
    if(!env.DB)return json({error:'Service indisponible.'},503);
@@ -101,7 +101,7 @@ export default {async fetch(request,env,ctx){
     const readAt=new Date().toISOString();
     await env.DB.prepare('UPDATE contact_requests SET read_at = ? WHERE reference = ? AND read_at IS NULL').bind(readAt,reference).run();
     const nz=JSON.parse(row.published_json||row.profile_json);
-    await background(ctx,sendMail(env,{to:[row.family_email],subject:nz.firstName+' a bien lu votre demande',text:'Bonjour '+row.family_name+',\n\n'+nz.firstName+' '+nz.lastName+' a bien lu votre demande envoyée via Mon Nzonzi et va vous répondre directement.\n\nSa fiche : '+url.origin+'/nzonzi/'+row.slug+'\n\nL’équipe Mon Nzonzi'}));
+    await background(ctx,sendMail(env,{to:[row.family_email],subject:nz.firstName+' a bien reçu votre demande',text:'Bonjour '+row.family_name+',\n\n'+nz.firstName+' '+nz.lastName+' a bien reçu votre demande envoyée via Mon Nzonzi et va vous répondre directement.\n\nSa fiche : '+url.origin+'/nzonzi/'+row.slug+'\n\nL’équipe Mon Nzonzi'}));
     return json({readAt});
    }catch{return json({error:'Action impossible pour le moment. Réessayez.'},503);}
   }

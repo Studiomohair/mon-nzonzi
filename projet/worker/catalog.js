@@ -724,7 +724,7 @@ async function sendContactRequest(request, env, profile, query) {
       values.message,
       '',
       'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
-      `Pour rassurer la famille, indiquez que vous avez lu sa demande dans votre espace : ${new URL(request.url).origin}/partenaire#demandes`,
+      `Pour rassurer la famille, indiquez-lui que vous avez bien reçu sa demande depuis votre espace : ${new URL(request.url).origin}/partenaire#demandes`,
       '',
       'L’équipe Mon Nzonzi',
     ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
@@ -746,7 +746,7 @@ async function sendContactRequest(request, env, profile, query) {
         `Bonjour ${values.name},`,
         '',
         `Votre demande a bien été transmise à ${firstName} via Mon Nzonzi. ${firstName} vous répondra directement par email${values.phone ? ' ou par téléphone' : ''}.`,
-        'Vous recevrez aussi un email dès qu’il ou elle aura lu votre demande.',
+        'Vous recevrez aussi un email dès qu’il ou elle aura confirmé la réception de votre demande.',
         '',
         'Récapitulatif :',
         `Ville de la cérémonie : ${values.city}`,
@@ -952,12 +952,12 @@ function render(profiles) {
     list.replaceChildren(...(items.length ? items.map(card) : [el('p', 'Aucun profil.', 'muted')]));
   }
 }
-const requestStates = { sent: 'Transmise, pas encore lue', failed: 'Échec de l’envoi, à relancer à la main', pending: 'Envoi en cours' };
+const requestStates = { sent: 'Transmise, réception pas encore confirmée', failed: 'Échec de l’envoi, à relancer à la main', pending: 'Envoi en cours' };
 const LATE_MS = 48 * 3600 * 1000;
 const isLate = r => r.status === 'sent' && !r.readAt && Date.now() - new Date(r.createdAt) > LATE_MS;
 function requestState(r) {
-  if (r.readAt) return 'Lue par le nzonzi le ' + new Date(r.readAt).toLocaleString('fr-FR');
-  if (isLate(r)) return '⚠ Non lue depuis plus de 48 h · à relancer';
+  if (r.readAt) return 'Réception confirmée par le nzonzi le ' + new Date(r.readAt).toLocaleString('fr-FR');
+  if (isLate(r)) return '⚠ Réception non confirmée depuis plus de 48 h · à relancer';
   return requestStates[r.status] || r.status;
 }
 function renderRequests(requests) {
@@ -1007,7 +1007,7 @@ async function load(message) {
     renderRequests(data.requests || []);
     const pending = data.profiles.filter(p => p.status === 'pending').length;
     const late = (data.requests || []).filter(isLate).length;
-    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.' + (late ? ' ' + late + ' demande' + (late > 1 ? 's' : '') + ' non lue' + (late > 1 ? 's' : '') + ' depuis plus de 48 h.' : '');
+    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.' + (late ? ' ' + late + ' demande' + (late > 1 ? 's' : '') + ' sans confirmation de réception depuis plus de 48 h.' : '');
   } catch (error) { statusEl.textContent = error.message || 'Chargement impossible. Rechargez la page.'; }
 }
 load();
@@ -1033,8 +1033,8 @@ function partnerRequests(requests) {
     const email = escapeHtml(r.family_email);
     const phone = r.family_phone ? ` · <a class="link" href="tel:${escapeHtml(r.family_phone.replace(/[^+\d]/g, ''))}">${escapeHtml(r.family_phone)}</a>` : '';
     const read = r.read_at
-      ? `<p class="request-read">Lue le ${formatDate.format(new Date(r.read_at))} · la famille a été prévenue</p>`
-      : `<p class="request-read"><button type="button" class="btn secondary mark-read" data-ref="${escapeHtml(r.reference)}">J’ai lu cette demande</button><span class="note">La famille reçoit un email pour être rassurée.</span></p>`;
+      ? `<p class="request-read">Réception confirmée à la famille le ${formatDate.format(new Date(r.read_at))}</p>`
+      : `<p class="request-read"><button type="button" class="btn secondary mark-read" data-ref="${escapeHtml(r.reference)}">Indiquer à la famille que j’ai reçu la demande</button><span class="note">La famille reçoit un email pour être rassurée.</span></p>`;
     return `<article class="request panel${r.read_at ? '' : ' unread'}"><div class="request-head"><h3>${escapeHtml(r.family_name)}</h3><span class="note">Reçue le ${formatDate.format(new Date(r.created_at))}</span></div>
       <p class="location">${icon('pin')}Cérémonie à ${escapeHtml(r.ceremony_city)}${escapeHtml(when)}</p>
       <p class="request-message">${escapeHtml(r.message)}</p>
@@ -1053,7 +1053,7 @@ function partnerRequests(requests) {
       const r = await fetch('/api/demandes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference: button.dataset.ref }) });
       if (!r.ok) throw new Error();
       article.classList.remove('unread');
-      box.textContent = 'Lue aujourd’hui · la famille a été prévenue';
+      box.textContent = 'Réception confirmée à la famille aujourd’hui';
     } catch { button.disabled = false; note.textContent = 'Impossible pour le moment. Réessayez.'; }
   });
   </script>`;
