@@ -87,4 +87,5 @@ assert.match(home, /src="\/assets\/mon-nzonzi-clair\.webp"/);
 const favicon = await visit('/assets/favicon.png');
 assert.equal(favicon.headers.get('Content-Type'), 'image/png');
 assert.match(home, /rel="icon"/);
+assert.match(home, /href="https:\/\/www\.instagram\.com\/monnzonzi\/"/);
 console.log('Répertoire, filtres combinés, animations, police, tarif, demande, reçu, protection et boîte de démo : OK.');

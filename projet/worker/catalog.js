@@ -81,6 +81,7 @@ const glyphs = {
   pin: '<path d="M19 10c0 5-7 10-7 10s-7-5-7-10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.2"/>',
   chat: '<path d="M21 11.5a8 8 0 0 1-8.5 7.5H5l1.6-3A7.1 7.1 0 0 1 4 11.5a8 8 0 0 1 8.5-7.5 8 8 0 0 1 8.5 7.5Z"/><path d="M9 11.5h7"/>',
   search: '<circle cx="10.5" cy="10.5" r="5.8"/><path d="m15 15 4.3 4.3"/>',
+  instagram: '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".9" fill="currentColor" stroke="none"/>',
   lock: '<rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/>',
 };
 function icon(name) {
@@ -215,7 +216,7 @@ function catalogResponse(html, status = 200) {
   return new Response(html, { status, headers: { ...catalogHeaders, 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
-// Logo « Mon-Nzonzi.fr » (25/11/2026) : bordeaux sur fond clair, version claire pour les fonds foncés.
+// Logo « Mon-Nzonzi.fr » (25/11/2026) : bordeaux sur fond clair, version blanche pour les fonds foncés.
 function brandLogo(light = false) {
   const file = light ? 'mon-nzonzi-clair.webp' : 'mon-nzonzi.webp';
   return siteAssets[file]
@@ -349,6 +350,10 @@ input::placeholder,textarea::placeholder{color:#8A8472}
 footer{background:var(--brun);color:var(--blanc);padding:28px 0}
 footer .shell{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;font-size:14px;font-weight:300}
 footer a{text-underline-offset:3px}
+.footer-links{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px}
+.social{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.social:hover span{text-decoration:underline}
+.social svg{width:22px;height:22px}
 
 .profile{padding:28px 0 72px}
 .back{display:inline-flex;align-items:center;gap:7px;color:var(--bordeaux);font-weight:600;font-size:15px;text-decoration:none;margin-bottom:20px}
@@ -502,7 +507,7 @@ ${demo ? `<div class="private"><div class="shell"><span>${icon('lock')} Prototyp
   <div class="nav-links">${links}</div>
 </nav></header>
 ${main}
-<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><a href="/partenaire">Espace nzonzi</a></div></footer>
+<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><span class="footer-links"><a class="social" href="https://www.instagram.com/monnzonzi/" target="_blank" rel="noopener" aria-label="Mon Nzonzi sur Instagram">${icon('instagram')}<span>@monnzonzi</span></a><a href="/partenaire">Espace nzonzi</a></span></div></footer>
 </body></html>`;
 }
 
