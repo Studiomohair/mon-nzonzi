@@ -1,35 +1,6 @@
-const demoProfiles = [
-  {
-    slug: 'jean-mavungu', name: 'Jean Mavungu', city: 'Saint-Denis', region: 'Île-de-France',
-    community: 'Kongo', languages: ['Français', 'Lingala', 'Kikongo'], net: 255,
-    summary: 'Un accompagnement de la première rencontre à la prise de parole le jour de la dot.',
-    bio: 'Je commence par écouter les deux familles pour comprendre leurs attentes. Nous préparons les prises de parole et les étapes de la rencontre ensemble, en respectant les usages de chacun.',
-    services: ['Échange de préparation avec la famille', 'Préparation du déroulé et des prises de parole', 'Accompagnement le jour de la cérémonie'],
-    travel: 'Île-de-France · Déplacements à convenir',
-  },
-  {
-    slug: 'patrick-ilunga', name: 'Patrick Ilunga', city: 'Lyon', region: 'Auvergne-Rhône-Alpes',
-    community: 'Luba', languages: ['Français', 'Tshiluba', 'Lingala'], net: 340,
-    summary: 'Une médiation attentive pour préparer le dialogue entre les familles et clarifier le déroulé.',
-    bio: 'J’aide les familles à mettre leurs attentes en commun avant la cérémonie. Je prends le temps d’expliquer le déroulé et de préparer une prise de parole que chacun peut suivre.',
-    services: ['Appel de préparation avec la famille', 'Coordination des échanges', 'Prise de parole lors de la dot'],
-    travel: 'Lyon et sa région · Déplacements à convenir',
-  },
-  {
-    slug: 'andre-mbuyi', name: 'André Mbuyi', city: 'Lille', region: 'Hauts-de-France',
-    community: 'Mongo', languages: ['Français', 'Lingala'], net: 170,
-    summary: 'Un interlocuteur pour préparer la rencontre et porter la parole de votre famille.',
-    bio: 'Nous fixons ensemble le rôle que vous souhaitez me confier. Je peux vous aider à préparer les échanges en amont et à trouver les bons mots pendant la rencontre.',
-    services: ['Échange de cadrage', 'Préparation du discours familial', 'Médiation pendant la rencontre'],
-    travel: 'Métropole lilloise · Déplacements à convenir',
-  },
-];
-
-// Les profils fictifs ne s'affichent que si SHOW_DEMO_PROFILES vaut "true" (tests, démonstration).
-// Les vrais profils n'apparaissent qu'après validation (colonne published_json).
+// Seuls les profils validés par l'équipe (colonne published_json) sont publiés.
 async function listedProfiles(env) {
-  const demo = env?.SHOW_DEMO_PROFILES === 'true' ? demoProfiles : [];
-  return [...demo, ...await publishedProfiles(env)];
+  return publishedProfiles(env);
 }
 async function publishedProfiles(env) {
   if (!env?.DB) return [];
@@ -46,7 +17,7 @@ const capitalize = value => value.charAt(0).toUpperCase() + value.slice(1);
 function publicProfile(slug, data) {
   const bio = String(data.bio || '').trim();
   return {
-    slug, real: true,
+    slug,
     name: [data.firstName, data.lastName].filter(Boolean).join(' '),
     city: data.city || '', region: data.region || '',
     community: String(data.community || '').trim(),
@@ -262,10 +233,6 @@ svg{width:20px;height:20px;flex:none}
 .skip{position:absolute;top:8px;left:8px;transform:translateY(-200%);z-index:3}
 .skip:focus{transform:none}
 .shell{width:min(1180px,calc(100% - 80px));margin-inline:auto}
-.private{background:var(--olive);color:var(--card);font-size:13px;padding:7px 0}
-.private .shell{display:flex;justify-content:space-between;gap:16px}
-.private span:first-child{display:flex;align-items:center;gap:7px}
-.private svg{width:14px;height:14px}
 .site-header nav{min-height:80px;display:flex;align-items:center;gap:28px}
 .brand{display:inline-flex;align-items:center;text-decoration:none;color:var(--ink)}
 .nav-links{display:flex;gap:28px;align-items:center;margin-left:auto;font-size:15px}
@@ -354,6 +321,28 @@ footer a{text-underline-offset:3px}
 .social{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
 .social:hover span{text-decoration:underline}
 .social svg{width:22px;height:22px}
+.legal-links{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px 22px;padding-top:14px;border-top:1px solid #E7E5DD33;font-size:13px}
+.legal-links a{color:#D9D5C8}
+.legal-links a:hover{color:var(--blanc)}
+.legal{padding:32px 0 80px}
+.legal .shell{max-width:780px}
+.legal h1{font-size:clamp(36px,4.4vw,54px);margin:10px 0 8px}
+.legal .updated{color:var(--muted);font-size:14px;margin-bottom:28px}
+.legal h2{font-size:clamp(24px,2.6vw,30px);font-weight:500;margin:36px 0 12px}
+.legal p,.legal li{color:var(--ink);font-weight:300}
+.legal p+p{margin-top:10px}
+.legal ul{padding-left:22px;margin:10px 0}
+.legal li+li{margin-top:6px}
+.legal a{color:var(--bordeaux);font-weight:500}
+.legal dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0}
+.legal dt{color:var(--muted)}
+.legal dd{margin:0}
+.todo{background:#F3E1D9;color:var(--bordeaux);border-radius:6px;padding:1px 6px;font-weight:500}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;font-weight:300}
+.check input{width:20px;min-width:20px;min-height:20px;height:20px;margin:3px 0 0;accent-color:var(--bordeaux)}
+.check a{color:var(--blanc);font-weight:500}
+.hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+@media(max-width:640px){.legal dl{grid-template-columns:1fr}.legal dt{margin-top:8px}}
 
 .profile{padding:28px 0 72px}
 .back{display:inline-flex;align-items:center;gap:7px;color:var(--bordeaux);font-weight:600;font-size:15px;text-decoration:none;margin-bottom:20px}
@@ -415,8 +404,6 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 .preview .card-image img{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid var(--blanc)}
 .preview h3{font-size:24px}
 .preview .preview-label{position:absolute;top:12px;left:12px}
-.inbox{margin-top:40px}
-.inbox h2{font-size:30px;margin-bottom:12px}
 .result{display:block;margin-top:12px;padding:16px 18px;border-radius:14px;background:var(--blanc)}
 .gate{max-width:640px;padding:64px 0 96px}
 .gate h1{font-size:clamp(36px,4.4vw,56px);margin-top:10px}
@@ -435,8 +422,6 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
   .site-header nav{min-height:66px;gap:12px}
   .nav-links>a{display:none}
   .nav-links .btn{min-height:42px;padding:8px 14px;font-size:14px}
-  .private .shell{justify-content:center}
-  .private span:last-child{display:none}
   .hero{width:calc(100% - 16px);border-radius:26px;padding:28px 0 12px}
   .hero .shell{grid-template-columns:1fr;gap:26px}
   .hero-art{aspect-ratio:1.3;border-radius:20px}
@@ -453,36 +438,9 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 @media(max-width:375px){.two-fields{grid-template-columns:1fr}.hero h1{font-size:38px}}
 `;
 
-const companionCss = siteTheme + motionCss + `
-body{font-family:var(--font);line-height:1.6;background:var(--paper);color:var(--ink)}
-h1,h2,h3,.brand,.amount,.commission,.quote,.art-caption{font-family:var(--display);font-weight:400;letter-spacing:-.02em}
-header{background:var(--paper)}
-.button,button{border-radius:999px;font-family:var(--font);background:var(--bordeaux);border-color:var(--bordeaux)}
-.button:hover,button:hover{background:var(--bordeaux-dark);border-color:var(--bordeaux-dark)}
-.secondary,.tabs button{background:transparent;color:var(--ink);border-color:var(--ink)}
-.secondary:hover,.tabs button:hover{background:var(--blanc)}
-.tabs button[aria-selected=true]{background:var(--ink);color:white}
-input,select,textarea{border-radius:12px;border-color:var(--field-border);font-family:var(--font)}
-form,.empty,.calc,.metric,.result{border-radius:22px}
-.hero,.service,.faq,main>section:first-child{background:var(--blanc)}
-.art{border-radius:26px;background:var(--stage);isolation:isolate}
-.art-caption{border-radius:14px}
-.metric,.result{border-color:var(--line)}
-.number{color:var(--bordeaux)}
-`;
-
-export function applySiteTheme(html) {
-  return html
-    .replace('</style>', () => companionCss + '</style>')
-    .replace('</head>', () => '<link rel="icon" type="image/png" href="/assets/favicon.png"></head>')
-    .replaceAll('<!-- BRAND_LOGO -->', () => brandLogo())
-    .replace(/<div class="art" role="img"[^>]*>[\s\S]*?<\/svg><div class="art-caption">/, () =>
-      '<div class="art">' + motionScene + '<div class="art-caption">');
-}
-
-// options.demo : bandeau « profils fictifs » ; options.space : navigation de l'espace nzonzi.
+// options.space : navigation de l'espace nzonzi.
 function layout(title, main, options = {}) {
-  const { demo = false, space = false } = typeof options === 'boolean' ? { demo: options } : options;
+  const { space = false } = options;
   const links = space
     ? `<a href="/">Voir les nzonzi</a><a class="btn secondary" href="/cdn-cgi/access/logout">Se déconnecter</a>`
     : `<a href="/#nzonzi">Les nzonzi</a><a href="/#comment">Comment ça marche</a><a class="btn secondary nav-partner" href="/partenaire">Vous êtes nzonzi ?</a>`;
@@ -501,13 +459,13 @@ function layout(title, main, options = {}) {
 </head>
 <body>
 <a href="#main" class="skip btn">Aller au contenu</a>
-${demo ? `<div class="private"><div class="shell"><span>${icon('lock')} Prototype privé</span><span>Les profils et demandes sont fictifs</span></div></div>` : ''}
 <header class="site-header"><nav class="shell" aria-label="Navigation principale">
   <a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo()}</a>
   <div class="nav-links">${links}</div>
 </nav></header>
 ${main}
-<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><span class="footer-links"><a class="social" href="https://www.instagram.com/monnzonzi/" target="_blank" rel="noopener" aria-label="Mon Nzonzi sur Instagram">${icon('instagram')}<span>@monnzonzi</span></a><a href="/partenaire">Espace nzonzi</a></span></div></footer>
+<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><span class="footer-links"><a class="social" href="https://www.instagram.com/monnzonzi/" target="_blank" rel="noopener" aria-label="Mon Nzonzi sur Instagram">${icon('instagram')}<span>@monnzonzi</span></a><a href="/partenaire">Espace nzonzi</a></span>
+<nav class="legal-links" aria-label="Informations légales"><a href="/mentions-legales">Mentions légales</a><a href="/confidentialite">Confidentialité</a><a href="/cgu">Conditions d’utilisation</a></nav></div></footer>
 </body></html>`;
 }
 
@@ -519,7 +477,7 @@ function location(profile) {
 }
 function card(profile, query) {
   return `<article class="card" data-profile="${profile.slug}">
-    <div class="card-image">${profileMotion(profile)}${profile.real ? '' : '<span class="badge">Profil de démo</span>'}</div>
+    <div class="card-image">${profileMotion(profile)}</div>
     <div class="card-content"><h3><a href="/nzonzi/${profile.slug}${query}">${escapeHtml(profile.name)}</a></h3>${location(profile)}
     ${pills([profile.community, ...profile.languages].filter(Boolean))}
     <p>${escapeHtml(profile.summary)}</p>
@@ -588,18 +546,81 @@ function directoryPage(filters, regions, profiles) {
   <div><h2 id="join-title">Vous êtes <strong>nzonzi ?</strong></h2><p>Créez votre profil gratuitement. Il apparaît dans l’annuaire après notre validation.</p></div>
   <a class="btn light" href="/partenaire">Créer mon profil ${icon('arrow')}</a>
 </div></section>
-</main>`, { demo: profiles.some(profile => !profile.real) });
+</main>`);
 }
 
-function realContact(profile) {
+// Envoi d'emails par Brevo (API transactionnelle). Rien n'est envoyé tant que
+// BREVO_API_KEY et BREVO_SENDER_EMAIL ne sont pas définis (secrets du Worker).
+export function mailEnabled(env) {
+  return Boolean(env?.BREVO_API_KEY && env?.BREVO_SENDER_EMAIL);
+}
+export function adminEmails(env) {
+  return [...new Set(String(env?.NZOZI_ADMIN_EMAILS || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean))];
+}
+export async function sendMail(env, { to, subject, text, replyTo, bcc = [] }) {
+  if (!mailEnabled(env)) return false;
+  const recipients = [...new Set(to.map(email => email.trim().toLowerCase()).filter(Boolean))];
+  if (!recipients.length) return false;
+  const hidden = [...new Set(bcc.map(email => email.trim().toLowerCase()))].filter(email => email && !recipients.includes(email));
+  const html = '<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#382D20">'
+    + escapeHtml(text).replace(/\n/g, '<br>') + '</div>';
+  const body = {
+    sender: { name: 'Mon Nzonzi', email: env.BREVO_SENDER_EMAIL },
+    to: recipients.map(email => ({ email })),
+    subject, textContent: text, htmlContent: html,
+  };
+  if (replyTo) body.replyTo = replyTo;
+  if (hidden.length) body.bcc = hidden.map(email => ({ email }));
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function contactForm(profile, url, state) {
+  const values = state.values || {};
+  const firstName = escapeHtml(profile.name.split(' ')[0]);
+  return `${state.error ? `<div class="feedback error" role="alert">${escapeHtml(state.error)}</div>` : ''}
+        <form method="post" action="${url}#contact">
+          <h2 id="contact-title">Contacter ${firstName}</h2>
+          <p class="muted">Votre message est envoyé par email à ${firstName}, qui vous répond directement.</p>
+          <input type="hidden" name="reference" value="${values.reference || crypto.randomUUID()}">
+          <div class="hp" aria-hidden="true"><label>Ne pas remplir<input name="site" tabindex="-1" autocomplete="off"></label></div>
+          <label class="field">Votre nom<input name="nom" maxlength="100" autocomplete="name" required value="${escapeHtml(values.name || '')}"></label>
+          <div class="two-fields">
+            <label class="field">Votre email<input name="email" type="email" maxlength="200" autocomplete="email" required value="${escapeHtml(values.email || '')}"></label>
+            <label class="field"><span>Téléphone <span class="optional">(facultatif)</span></span><input name="telephone" type="tel" maxlength="40" autocomplete="tel" value="${escapeHtml(values.phone || '')}"></label>
+          </div>
+          <div class="two-fields">
+            <label class="field">Ville de la cérémonie<input name="ville" maxlength="100" required value="${escapeHtml(values.city || '')}"></label>
+            <label class="field"><span>Date <span class="optional">(facultatif)</span></span><input type="date" name="date" value="${escapeHtml(values.date || '')}"></label>
+          </div>
+          <label class="field">Votre message<textarea name="message" maxlength="2000" required placeholder="Présentez votre famille et votre projet de cérémonie.">${escapeHtml(values.message || '')}</textarea></label>
+          <label class="check"><input type="checkbox" name="accord" value="oui" required${values.consent ? ' checked' : ''}><span>J’accepte que mes coordonnées et mon message soient transmis à ${firstName} et à l’équipe Mon Nzonzi. <a href="/confidentialite" target="_blank">En savoir plus</a></span></label>
+          <button class="btn" type="submit">Envoyer ${icon('arrow')}</button>
+        </form>`;
+}
+
+function contactSection(profile, url, state, env) {
+  const firstName = escapeHtml(profile.name.split(' ')[0]);
+  const body = state.sent
+    ? `<h2 id="contact-title">Contacter ${firstName}</h2><div class="feedback" role="status"><p><strong>Merci, votre demande a été envoyée.</strong></p><p>${firstName} vous répondra directement par email.</p></div>`
+    : mailEnabled(env)
+      ? contactForm(profile, url, state)
+      : `<h2 id="contact-title">Contacter ${firstName}</h2><p class="muted">La prise de contact en ligne ouvre très bientôt.</p>`;
   return `<section class="panel contact" id="contact" aria-labelledby="contact-title">
         <p class="kicker">Prix total</p><strong class="price">${profilePrice(profile)}</strong>
         <p>Commission incluse.${profile.duration ? ' Durée : ' + escapeHtml(profile.duration) + '.' : ''} Déplacements à convenir.</p>
-        <h2 id="contact-title">Contacter ${escapeHtml(profile.name.split(' ')[0])}</h2>
-        <p class="muted">La prise de contact en ligne ouvre très bientôt.</p>
+        ${body}
       </section>`;
 }
-function realDetails(profile) {
+function profileDetails(profile) {
   const block = (title, value) => value ? `<h3>${title}</h3><p>${escapeHtml(value)}</p>` : '';
   return `${profile.services.length ? `<h3>Prestations</h3><ul>${profile.services.map(service => `<li>${escapeHtml(service)}</li>`).join('')}</ul>` : ''}
         ${block('Coutumes', profile.traditions)}
@@ -608,87 +629,216 @@ function realDetails(profile) {
         ${block('Conditions', profile.conditions)}`;
 }
 
-function profilePage(profile, query, state = {}) {
+function profilePage(profile, query, state = {}, env = {}) {
   const url = '/nzonzi/' + profile.slug + query;
-  const values = state.values || {};
-  const feedback = state.receipt
-    ? '<div class="feedback" role="status"><p><strong>Demande de démonstration enregistrée.</strong></p><p>Retrouvez-la dans <a class="link" href="/partenaire#demandes-demo">l’espace nzonzi</a>.</p></div>'
-    : state.error ? `<div class="feedback error" role="alert">${escapeHtml(state.error)}</div>` : '';
   return layout(profile.name, `<main class="profile" id="main"><div class="shell">
     <a class="back" href="/${query}#nzonzi">${icon('back')} Tous les nzonzi</a>
     <section class="panel profile-head" aria-labelledby="profile-name">
       <div>${profileMotion(profile)}</div>
-      <div class="profile-intro">${profile.real ? '' : '<span class="badge">Profil de démonstration</span>'}<h1 id="profile-name">${escapeHtml(profile.name)}</h1>
+      <div class="profile-intro"><h1 id="profile-name">${escapeHtml(profile.name)}</h1>
       ${location(profile)}${pills([profile.community, ...profile.languages].filter(Boolean))}<p class="lead">${escapeHtml(profile.summary)}</p></div>
     </section>
     <div class="profile-layout">
       <section class="panel details"><h2>Présentation</h2><p>${escapeHtml(profile.bio)}</p>
-        ${profile.real ? realDetails(profile) : `<h3>Prestations</h3><ul>${profile.services.map(service => `<li>${escapeHtml(service)}</li>`).join('')}</ul>
-        <h3>Se déplace</h3><p>${escapeHtml(profile.travel)}</p>`}
+        ${profileDetails(profile)}
       </section>
-      ${profile.real ? realContact(profile) : `<section class="panel contact" id="contact" aria-labelledby="contact-title">
-        <p class="kicker">Prix total</p><strong class="price">${profilePrice(profile)}</strong>
-        <p>Commission incluse. Déplacements à convenir.</p>
-        ${feedback}
-        <form method="post" action="${url}#contact">
-          <h2 id="contact-title">Demande de démo</h2>
-          <p class="muted">Utilisez des informations fictives. La demande apparaît dans l’espace nzonzi de ce prototype.</p>
-          <input type="hidden" name="reference" value="${values.reference || crypto.randomUUID()}">
-          <div class="two-fields">
-            <label class="field">Ville de la cérémonie<input name="ville" maxlength="100" required value="${escapeHtml(values.city || '')}"></label>
-            <label class="field"><span>Date <span class="optional">(facultatif)</span></span><input type="date" name="date" value="${escapeHtml(values.date || '')}"></label>
-          </div>
-          <label class="field">Votre message<textarea name="message" maxlength="500" required placeholder="Ex. Nous préparons une cérémonie de dot.">
-${escapeHtml(values.message || '')}</textarea></label>
-          <button class="btn" type="submit">Envoyer ${icon('arrow')}</button>
-        </form>
-      </section>`}
+      ${contactSection(profile, url, state, env)}
     </div>
-  </div></main>`, { demo: !profile.real });
+  </div></main>`);
 }
 
-async function saveDemoRequest(request, env, profile, query) {
-  const userId = request.headers.get('oai-authenticated-user-id');
-  if (!userId) return catalogResponse(profilePage(profile, query, { error: 'Connectez-vous pour enregistrer une demande de démonstration.' }), 401);
-  if (request.headers.get('Origin') !== new URL(request.url).origin) return catalogResponse(profilePage(profile, query, { error: 'Origine de la demande non autorisée.' }), 403);
-  const type = request.headers.get('Content-Type') || '';
-  if (!type.startsWith('application/x-www-form-urlencoded')) return new Response(null, { status: 415, headers: catalogHeaders });
-  const body = await request.text();
-  if (body.length > 9000) return new Response(null, { status: 413, headers: catalogHeaders });
-  const fields = new URLSearchParams(body);
+// Demandes des familles : conservées 12 mois (voir la politique de confidentialité).
+const CONTACT_RETENTION_MS = 365 * 24 * 3600 * 1000;
+const CONTACT_LIMIT_PER_HOUR = 5;
+async function sha256(value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+const changes = result => Number(result?.meta?.changes ?? result?.changes ?? 0);
+
+async function sendContactRequest(request, env, profile, query) {
+  if (!mailEnabled(env) || !env.DB) return new Response(null, { status: 405, headers: catalogHeaders });
+  const show = (state, status) => catalogResponse(profilePage(profile, query, state, env), status);
+  if (request.headers.get('Origin') !== new URL(request.url).origin) return show({ error: 'Origine de la demande non autorisée.' }, 403);
+  if (!(request.headers.get('Content-Type') || '').startsWith('application/x-www-form-urlencoded')) return new Response(null, { status: 415, headers: catalogHeaders });
+  const raw = await request.text();
+  if (raw.length > 12000) return new Response(null, { status: 413, headers: catalogHeaders });
+  const fields = new URLSearchParams(raw);
+  const get = (name, max) => (fields.get(name) || '').trim().slice(0, max);
   const reference = fields.get('reference') || '';
-  const city = (fields.get('ville') || '').trim();
-  const date = (fields.get('date') || '').trim();
-  const message = (fields.get('message') || '').trim();
-  const values = { reference: safeId.test(reference) ? reference : undefined, city: city.slice(0, 100), date, message: message.slice(0, 500) };
-  const showError = (error, status) => catalogResponse(profilePage(profile, query, { values, error }), status);
+  const values = {
+    reference: safeId.test(reference) ? reference : undefined,
+    name: get('nom', 100), email: get('email', 200), phone: get('telephone', 40),
+    city: get('ville', 100), date: get('date', 10), message: get('message', 2000),
+    consent: fields.get('accord') === 'oui',
+  };
+  const sentUrl = '/nzonzi/' + profile.slug + (query ? query.replace(/&amp;/g, '&') + '&' : '?') + 'envoye=1#contact';
+  const done = () => new Response(null, { status: 303, headers: { ...catalogHeaders, Location: sentUrl } });
+  // Champ piège invisible : les robots le remplissent, on fait semblant d'avoir envoyé.
+  if (get('site', 200)) return done();
+  const error = message => show({ values, error: message }, 400);
+  const { date } = values;
   const validDate = !date || (/^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date);
-  if (!values.reference || !city || city.length > 100 || !validDate || !message || message.length > 500) return showError('Vérifiez la ville, la date et le message, puis réessayez.', 400);
+  if (!values.reference || !values.name || !values.city || !values.message) return error('Complétez votre nom, la ville et votre message.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return error('Vérifiez votre adresse email.');
+  if (!validDate) return error('Vérifiez la date de la cérémonie.');
+  if (!values.consent) return error('Cochez la case pour accepter la transmission de votre demande.');
+  const now = new Date();
   try {
-    await env.DB.prepare('INSERT INTO demo_requests (user_id, reference, profile_slug, ceremony_city, ceremony_date, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, reference) DO NOTHING')
-      .bind(userId, reference, profile.slug, city, date, message, new Date().toISOString()).run();
+    const row = await env.DB.prepare('SELECT published_json FROM nzozi_profiles WHERE slug = ? AND published_json IS NOT NULL').bind(profile.slug).first();
+    const to = row ? String(JSON.parse(row.published_json).contactEmail || '') : '';
+    if (!to) return show({ values, error: 'Ce nzonzi ne peut pas être contacté pour le moment.' }, 503);
+    const ip = request.headers.get('CF-Connecting-IP') || '';
+    const ipHash = await sha256(ip + '|' + now.toISOString().slice(0, 10));
+    const recent = await env.DB.prepare('SELECT COUNT(*) AS count FROM contact_requests WHERE ip_hash = ? AND created_at > ?')
+      .bind(ipHash, new Date(now - 3600 * 1000).toISOString()).first();
+    if (Number(recent?.count || 0) >= CONTACT_LIMIT_PER_HOUR) return show({ values, error: 'Trop de demandes envoyées. Réessayez dans une heure.' }, 429);
+    await env.DB.prepare('DELETE FROM contact_requests WHERE created_at < ?').bind(new Date(now - CONTACT_RETENTION_MS).toISOString()).run();
+    const inserted = await env.DB.prepare("INSERT INTO contact_requests (reference, profile_slug, family_name, family_email, family_phone, ceremony_city, ceremony_date, message, ip_hash, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?) ON CONFLICT(reference) DO NOTHING")
+      .bind(values.reference, profile.slug, values.name, values.email, values.phone, values.city, values.date, values.message, ipHash, now.toISOString()).run();
+    // Double clic ou rechargement : la demande est déjà partie.
+    if (!changes(inserted)) return done();
+    const firstName = profile.name.split(' ')[0];
+    const text = [
+      `Bonjour ${firstName},`,
+      '',
+      `Une famille vous contacte via Mon Nzonzi pour une cérémonie de dot.`,
+      '',
+      `Nom : ${values.name}`,
+      `Email : ${values.email}`,
+      values.phone ? `Téléphone : ${values.phone}` : '',
+      `Ville de la cérémonie : ${values.city}`,
+      values.date ? `Date : ${formatDate.format(new Date(values.date))}` : '',
+      '',
+      'Message :',
+      values.message,
+      '',
+      'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
+      '',
+      'L’équipe Mon Nzonzi',
+    ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
+    const sent = await sendMail(env, {
+      to: [to], bcc: adminEmails(env),
+      subject: `Nouvelle demande de ${values.name} · Mon Nzonzi`,
+      text, replyTo: { email: values.email, name: values.name },
+    });
+    await env.DB.prepare('UPDATE contact_requests SET status = ? WHERE reference = ?').bind(sent ? 'sent' : 'failed', values.reference).run();
+    if (!sent) {
+      // Nouvelle référence : la famille peut renvoyer la même demande.
+      return show({ values: { ...values, reference: undefined }, error: 'Votre demande n’a pas pu être envoyée. Réessayez dans quelques minutes.' }, 502);
+    }
   } catch {
-    return showError('La demande n’a pas pu être enregistrée. Réessayez dans quelques instants.', 503);
+    return show({ values: { ...values, reference: undefined }, error: 'Votre demande n’a pas pu être envoyée. Réessayez dans quelques minutes.' }, 503);
   }
-  const next = new URLSearchParams(new URL(request.url).search);
-  next.set('demande', reference);
-  return new Response(null, { status: 303, headers: { ...catalogHeaders, Location: '/nzonzi/' + profile.slug + '?' + next + '#contact' } });
+  return done();
 }
 
-export async function renderDemoInbox(env, userId) {
-  let rows;
-  try {
-    ({ results: rows } = await env.DB.prepare('SELECT profile_slug, ceremony_city, ceremony_date, message, created_at FROM demo_requests WHERE user_id = ? ORDER BY created_at DESC LIMIT 12').bind(userId).all());
-  } catch {
-    return '<p class="result" role="status">Les demandes sont temporairement indisponibles.</p>';
-  }
-  if (!rows.length) return '';
-  return rows.map(row => {
-    const name = demoProfiles.find(profile => profile.slug === row.profile_slug)?.name || 'Profil de démonstration';
-    const date = row.ceremony_date ? ' · Cérémonie le ' + formatDate.format(new Date(row.ceremony_date)) : '';
-    return `<article class="result"><strong>${escapeHtml(name)}</strong> · ${escapeHtml(row.ceremony_city)}${date}<br><small>Reçue le ${formatDate.format(new Date(row.created_at))}</small><br>${escapeHtml(row.message)}</article>`;
-  }).join('');
+// Informations légales. Les valeurs vides s'affichent « à compléter ».
+const legalInfo = {
+  publisher: '',          // Nom et prénom de l'entrepreneur, ou raison sociale
+  legalForm: '',          // Ex. Entrepreneur individuel (micro-entreprise)
+  address: '',            // Adresse du siège
+  siret: '',              // Numéro SIRET (14 chiffres)
+  email: '',              // Email de contact public, ex. contact@mon-nzonzi.fr
+  director: '',           // Directeur ou directrice de la publication
+  updated: '25 novembre 2026',
+};
+function info(key, label) {
+  return legalInfo[key] ? escapeHtml(legalInfo[key]) : `<mark class="todo">${label} à compléter</mark>`;
 }
+function contactLink() {
+  return legalInfo.email ? `<a href="mailto:${escapeHtml(legalInfo.email)}">${escapeHtml(legalInfo.email)}</a>` : info('email', 'Email de contact');
+}
+function legalPage(title, body) {
+  return layout(title, `<main class="legal" id="main"><div class="shell">
+  <p class="kicker">Informations légales</p>
+  <h1>${title}</h1>
+  <p class="updated">Dernière mise à jour : ${legalInfo.updated}</p>
+  ${body}
+</div></main>`);
+}
+const legalPages = {
+  '/mentions-legales': () => legalPage('Mentions légales', `
+  <h2>Éditeur du site</h2>
+  <dl>
+    <dt>Nom</dt><dd>${info('publisher', 'Nom ou raison sociale')}</dd>
+    <dt>Statut</dt><dd>${info('legalForm', 'Statut juridique')}</dd>
+    <dt>Adresse</dt><dd>${info('address', 'Adresse')}</dd>
+    <dt>SIRET</dt><dd>${info('siret', 'SIRET')}</dd>
+    <dt>Email</dt><dd>${contactLink()}</dd>
+    <dt>Directeur de la publication</dt><dd>${info('director', 'Nom')}</dd>
+  </dl>
+  <h2>Hébergement</h2>
+  <p>Cloudflare, Inc., 101 Townsend Street, San Francisco, CA 94107, États-Unis. <a href="https://www.cloudflare.com" target="_blank" rel="noopener">cloudflare.com</a></p>
+  <h2>Propriété intellectuelle</h2>
+  <p>Le nom Mon Nzonzi, le logo, les textes et les illustrations du site appartiennent à l’éditeur. Toute reproduction sans autorisation est interdite. Les textes des profils restent la propriété des nzonzi qui les ont rédigés.</p>
+  <p>Le site utilise la police Outfit, sous licence SIL Open Font License.</p>
+  <h2>Contact</h2>
+  <p>Pour toute question ou pour signaler un contenu : ${contactLink()}.</p>`),
+
+  '/confidentialite': () => legalPage('Politique de confidentialité', `
+  <p>Cette page explique quelles données Mon Nzonzi utilise, pourquoi, et comment exercer vos droits. Nous collectons seulement ce qui est utile à la mise en relation.</p>
+  <h2>Responsable du traitement</h2>
+  <p>${info('publisher', 'Nom ou raison sociale')}, ${info('address', 'Adresse')}. Contact : ${contactLink()}.</p>
+  <h2>Les données que nous utilisons</h2>
+  <ul>
+    <li><strong>Familles</strong> : nom, email, téléphone (facultatif), ville et date de la cérémonie, message. Elles servent uniquement à transmettre votre demande au nzonzi choisi.</li>
+    <li><strong>Nzonzi</strong> : email de connexion, prénom, nom, email et téléphone de contact, ville, région, langues, présentation, prestations, tarif, conditions, communauté (facultative) et photo (facultative). Elles servent à créer, vérifier et publier votre fiche.</li>
+    <li><strong>Données techniques</strong> : adresse IP et journaux techniques, utilisés pour la sécurité du site et contre les envois abusifs. L’adresse IP liée à une demande est conservée sous une forme non lisible (empreinte).</li>
+  </ul>
+  <h2>Pourquoi et sur quelle base</h2>
+  <ul>
+    <li>Transmettre la demande d’une famille à un nzonzi : mesures prises à votre demande (article 6.1.b du RGPD).</li>
+    <li>Publier la fiche d’un nzonzi et gérer son espace : exécution des conditions d’utilisation (article 6.1.b).</li>
+    <li>Sécurité du site et lutte contre le spam : intérêt légitime de Mon Nzonzi (article 6.1.f).</li>
+  </ul>
+  <p>La <strong>communauté</strong> est une information facultative et déclarative. Elle n’est jamais déduite d’un nom ou d’une photo. Si un nzonzi la renseigne, elle est affichée sur sa fiche publique avec son accord explicite. Il peut la retirer à tout moment depuis son espace.</p>
+  <h2>Qui voit vos données</h2>
+  <ul>
+    <li>Le nzonzi que vous contactez reçoit votre demande par email et vous répond directement.</li>
+    <li>L’équipe Mon Nzonzi reçoit une copie des demandes et vérifie les fiches avant publication.</li>
+    <li>Sur une fiche publique, seuls le nom, la ville, la région, les langues, la communauté (si renseignée), la présentation, les prestations et le prix sont visibles. L’email et le téléphone d’un nzonzi ne sont jamais affichés.</li>
+    <li>Nos prestataires techniques : Cloudflare (hébergement, base de données, connexion à l’espace nzonzi), dont les serveurs peuvent être situés hors de l’Union européenne, avec les garanties prévues par le RGPD (clauses contractuelles types et Data Privacy Framework) ; Brevo (envoi des emails), société française.</li>
+  </ul>
+  <p>Vos données ne sont jamais vendues ni utilisées pour de la publicité.</p>
+  <h2>Combien de temps</h2>
+  <ul>
+    <li>Demandes des familles : 12 mois après l’envoi, puis supprimées.</li>
+    <li>Profils des nzonzi : tant que le compte est actif. Sur demande, le profil est retiré puis supprimé sous 30 jours.</li>
+    <li>Journaux techniques : quelques jours, selon les règles de notre hébergeur.</li>
+  </ul>
+  <h2>Cookies</h2>
+  <p>Le site n’utilise ni cookie publicitaire ni outil de mesure d’audience. Seul un cookie de connexion (CF_Authorization) est déposé quand un nzonzi se connecte à son espace. Il est nécessaire au fonctionnement du service et ne demande donc pas de consentement.</p>
+  <h2>Vos droits</h2>
+  <p>Vous pouvez demander l’accès à vos données, leur correction, leur suppression, leur portabilité, ou vous opposer à leur utilisation, en écrivant à ${contactLink()}. Nous répondons sous un mois.</p>
+  <p>Si vous estimez que vos droits ne sont pas respectés, vous pouvez saisir la CNIL : <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">cnil.fr/fr/plaintes</a>.</p>`),
+
+  '/cgu': () => legalPage('Conditions d’utilisation', `
+  <h2>1. Le service</h2>
+  <p>Mon Nzonzi est un annuaire qui aide les familles à trouver un nzonzi (porte-parole ou médiateur) pour préparer une cérémonie de dot, dans le respect des coutumes de chacun. Mon Nzonzi met en relation les familles et les nzonzi. Il n’organise pas la cérémonie et n’est pas partie à l’accord conclu entre une famille et un nzonzi.</p>
+  <h2>2. Pour les familles</h2>
+  <ul>
+    <li>La consultation de l’annuaire et l’envoi d’une demande sont gratuits et sans engagement.</li>
+    <li>Le prix affiché sur une fiche est un prix total indicatif, commission Mon Nzonzi incluse. Les détails (durée, déplacements, déroulé) se décident directement avec le nzonzi.</li>
+    <li>Mon Nzonzi n’encaisse aucun paiement à ce jour. ${'<mark class="todo">Modalités de paiement et de commission à compléter</mark>'}</li>
+    <li>Merci de rester courtois et d’utiliser le formulaire uniquement pour une demande réelle.</li>
+  </ul>
+  <h2>3. Pour les nzonzi</h2>
+  <ul>
+    <li>L’inscription et la création du profil sont gratuites. Le profil est publié après vérification par l’équipe Mon Nzonzi, qui peut refuser ou retirer un profil, notamment s’il est incomplet, trompeur ou contraire à ces conditions.</li>
+    <li>Le nzonzi garantit que les informations de son profil sont exactes et qu’il a le droit de publier sa photo.</li>
+    <li>Il fixe librement la rémunération qu’il souhaite recevoir. Le prix affiché aux familles inclut la commission Mon Nzonzi (15 % du prix total).</li>
+    <li>Il s’engage à répondre aux familles avec respect et à utiliser leurs coordonnées uniquement pour leur demande.</li>
+    <li>Il exerce son activité en toute indépendance et reste responsable de ses obligations (déclarations, assurances, impôts).</li>
+    <li>Il peut modifier son profil à tout moment depuis son espace, ou demander sa suppression à ${contactLink()}.</li>
+  </ul>
+  <h2>4. Responsabilité</h2>
+  <p>Mon Nzonzi vérifie les profils avant publication mais ne peut pas garantir le déroulement d’une cérémonie. En cas de désaccord entre une famille et un nzonzi, la solution se trouve d’abord entre eux. Vous pouvez nous signaler tout problème à ${contactLink()}.</p>
+  <h2>5. Données personnelles</h2>
+  <p>Voir la <a href="/confidentialite">politique de confidentialité</a>.</p>
+  <h2>6. Modifications et droit applicable</h2>
+  <p>Ces conditions peuvent évoluer. La version en vigueur est celle publiée sur cette page. Elles sont soumises au droit français.</p>`),
+};
 
 export async function catalog(request, env, regions) {
   const url = new URL(request.url);
@@ -703,6 +853,11 @@ export async function catalog(request, env, regions) {
       headers: { ...catalogHeaders, 'Content-Type': type },
     });
   }
+  const legal = legalPages[pathname];
+  if (legal) {
+    if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
+    return catalogResponse(request.method === 'HEAD' ? null : legal());
+  }
   if (pathname !== '/' && pathname !== '/index.html' && !pathname.startsWith('/nzonzi/')) return null;
   const profiles = await listedProfiles(env);
   const filters = filterState(url.searchParams, regions, profiles);
@@ -713,20 +868,10 @@ export async function catalog(request, env, regions) {
   const profile = profiles.find(entry => pathname === '/nzonzi/' + entry.slug);
   if (!profile) return catalogResponse(request.method === 'HEAD' ? null : layout('Profil introuvable', '<main class="profile" id="main"><div class="shell"><h1>Profil introuvable</h1><a class="back" href="/#nzonzi">Retour aux profils</a></div></main>'), 404);
   const query = filterQuery(filters);
-  if (request.method === 'POST' && !profile.real) return saveDemoRequest(request, env, profile, query);
+  if (request.method === 'POST') return sendContactRequest(request, env, profile, query);
   if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
   if (request.method === 'HEAD') return catalogResponse(null);
-  const reference = url.searchParams.get('demande') || '';
-  const userId = request.headers.get('oai-authenticated-user-id');
-  let receipt = false;
-  if (userId && safeId.test(reference)) {
-    try {
-      receipt = Boolean(await env.DB.prepare('SELECT reference FROM demo_requests WHERE user_id = ? AND reference = ? AND profile_slug = ?').bind(userId, reference, profile.slug).first());
-    } catch {
-      return catalogResponse(profilePage(profile, query, { error: 'Le reçu est temporairement indisponible. Retrouvez la demande dans l’espace nzonzi.' }), 503);
-    }
-  }
-  return catalogResponse(profilePage(profile, query, { receipt }));
+  return catalogResponse(profilePage(profile, query, { sent: url.searchParams.get('envoye') === '1' }, env));
 }
 
 // Page d'administration : liste des profils et validation avant publication.
@@ -740,6 +885,7 @@ export function adminPage() {
   <section aria-labelledby="pending-title"><h2 id="pending-title">À valider</h2><div id="list-pending" class="admin-list"></div></section>
   <section aria-labelledby="approved-title"><h2 id="approved-title">Publiés</h2><div id="list-approved" class="admin-list"></div></section>
   <section aria-labelledby="rejected-title"><h2 id="rejected-title">Refusés ou retirés</h2><div id="list-rejected" class="admin-list"></div></section>
+  <section aria-labelledby="requests-title"><h2 id="requests-title">Demandes des familles</h2><p class="muted">Les 50 dernières demandes envoyées depuis les fiches. Vous en recevez aussi une copie par email.</p><div id="list-requests" class="admin-list"></div></section>
 </div></main>
 <style>
 .admin h1{margin:14px 0 10px}.admin section{margin-top:34px}.admin h2{margin-bottom:14px}
@@ -774,6 +920,18 @@ function render(profiles) {
     list.replaceChildren(...(items.length ? items.map(card) : [el('p', 'Aucun profil.', 'muted')]));
   }
 }
+const requestStates = { sent: 'Transmise au nzonzi', failed: 'Échec de l’envoi, à relancer à la main', pending: 'Envoi en cours' };
+function renderRequests(requests) {
+  const list = document.getElementById('list-requests');
+  list.replaceChildren(...(requests.length ? requests.map(r => {
+    const article = el('article', '', 'panel admin-card');
+    article.append(el('span', requestStates[r.status] || r.status, 'admin-state'), el('h3', r.name + ' → ' + r.slug));
+    const dl = document.createElement('dl');
+    for (const [label, value] of [['Reçue le', new Date(r.createdAt).toLocaleString('fr-FR')], ['Email', r.email], ['Téléphone', r.phone], ['Ville', r.city], ['Date', r.date], ['Message', r.message]]) if (value) dl.append(el('dt', label), el('dd', value));
+    article.append(dl);
+    return article;
+  }) : [el('p', 'Aucune demande pour le moment.', 'muted')]));
+}
 function card(p) {
   const article = el('article', '', 'panel admin-card');
   article.append(el('span', labels[p.status](p), 'admin-state'), el('h3', [p.profile.firstName, p.profile.lastName].join(' ')));
@@ -806,6 +964,7 @@ async function load(message) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Chargement impossible.');
     render(data.profiles);
+    renderRequests(data.requests || []);
     const pending = data.profiles.filter(p => p.status === 'pending').length;
     statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.';
   } catch (error) { statusEl.textContent = error.message || 'Chargement impossible. Rechargez la page.'; }
@@ -825,7 +984,7 @@ export function spaceGatePage(kind) {
 </div></main>`, { space: denied });
 }
 
-export function partnerPage({ regions, photo = false, inbox = '' }) {
+export function partnerPage({ regions, photo = false }) {
   const field = (label, name, attrs = '', extra = '') => `<label class="field${extra}"><span>${label}</span><input name="${name}" ${attrs}></label>`;
   const req = ' <span aria-hidden="true">*</span>';
   const opt = ' <span class="optional">(facultatif)</span>';
@@ -857,7 +1016,7 @@ export function partnerPage({ regions, photo = false, inbox = '' }) {
         <label class="field full"><span>Présentation${req}</span><textarea name="bio" maxlength="2000" required placeholder="Qui êtes-vous ? Comment accompagnez-vous les familles ?"></textarea></label>
         <label class="field full"><span>Prestations${opt}</span><textarea name="services" maxlength="2000" placeholder="Une prestation par ligne. Ex. Préparation avec la famille"></textarea></label>
         ${field('Coutumes que vous connaissez' + opt, 'traditions', 'maxlength="500"', ' full')}
-        <label class="field full"><span>Communauté${opt}</span><input name="community" maxlength="200" aria-describedby="community-help"><span id="community-help" class="note">À indiquer seulement si vous le souhaitez.</span></label>
+        <label class="field full"><span>Communauté${opt}</span><input name="community" maxlength="200" aria-describedby="community-help"><span id="community-help" class="note">À indiquer seulement si vous le souhaitez. Elle sera affichée sur votre fiche publique.</span></label>
         ${field('Années d’expérience' + opt, 'experience', 'type="number" min="0" max="80" step="1" inputmode="numeric"')}
         ${field('Où vous déplacez-vous ?' + opt, 'travelArea', 'maxlength="250" placeholder="Ex. Île-de-France"')}
       </fieldset>
@@ -869,7 +1028,7 @@ export function partnerPage({ regions, photo = false, inbox = '' }) {
         <label class="field full"><span>Conditions${opt}</span><textarea name="conditions" maxlength="1500" placeholder="Frais de déplacement, disponibilités…"></textarea></label>
       </fieldset>
       <div class="save-row"><button id="save-profile" class="btn" type="submit" disabled>Enregistrer mon profil</button><p id="profile-status" role="status" aria-live="polite">Chargement…</p></div>
-      <p class="note"><span aria-hidden="true">*</span> Champs obligatoires</p>
+      <p class="note"><span aria-hidden="true">*</span> Champs obligatoires. En enregistrant votre profil, vous acceptez les <a class="link" href="/cgu" target="_blank">conditions d’utilisation</a> et la <a class="link" href="/confidentialite" target="_blank">politique de confidentialité</a>.</p>
     </form>
     <aside class="card preview" aria-label="Aperçu de votre fiche">
       <div class="card-image"><div class="profile-motion" data-tone="0"></div><img id="preview-photo" alt="" hidden><span class="badge preview-label">Aperçu</span></div>
@@ -882,7 +1041,6 @@ export function partnerPage({ regions, photo = false, inbox = '' }) {
       </div>
     </aside>
   </div>
-  ${inbox ? `<section class="inbox" id="demandes-demo" aria-labelledby="inbox-title"><h2 id="inbox-title">Demandes de démonstration</h2><p class="note">Demandes fictives créées avec ce compte.</p>${inbox}</section>` : ''}
 </div></main>
 <script>
 const fmt=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'});const input=document.getElementById('net');function familyPrice(n){const net=Math.round(n*100);const total=Math.round(net/0.85);return {total:total/100,fee:(total-net)/100};}function validRate(val){const n=Number(val);return String(val).trim()!==''&&Number.isFinite(n)&&n>=1&&n<=100000&&Math.abs(n*100-Math.round(n*100))<0.000001;}function update(){const val=input.value;const valid=validRate(val);document.getElementById('calc-error').hidden=valid||String(val).trim()==='';input.setAttribute('aria-invalid',String(!valid&&String(val).trim()!==''));document.getElementById('total-value').textContent='—';document.getElementById('fee-value').textContent='—';if(!valid)return;const p=familyPrice(Number(val));document.getElementById('total-value').textContent=fmt.format(p.total);document.getElementById('fee-value').textContent=fmt.format(p.fee);}input.addEventListener('input',update);update();

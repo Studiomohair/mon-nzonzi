@@ -59,3 +59,8 @@ La licence Playfair est incluse ; ne pas la supprimer. Le logo et les autres res
 
 ## Pistes à faire préciser au propriétaire
 Prochain objectif fonctionnel ; maintien ou changement d’hébergement ; authentification cible ; publication de vrais partenaires ; validation des profils ; réservations, commission et paiements ; mentions et modalités de traitement des données.
+
+## Mise à jour du 25/11/2026 (étape 3)
+- Restes du prototype supprimés : profils fictifs (`SHOW_DEMO_PROFILES`), demandes de démonstration, bandeau « Prototype privé » et ancienne page `/presentation`. La table `demo_requests` reste en base mais n'est plus utilisée.
+- Pages légales : `/mentions-legales`, `/confidentialite`, `/cgu` (objet `legalInfo` dans `worker/catalog.js`).
+- Formulaire de contact famille → nzonzi sur chaque fiche validée, et alertes email, via Brevo. Inactifs tant que `BREVO_API_KEY` et `BREVO_SENDER_EMAIL` ne sont pas définis. Voir `projet/DEPLOIEMENT.md`.
