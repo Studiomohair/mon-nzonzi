@@ -216,11 +216,11 @@ function catalogResponse(html, status = 200) {
   return new Response(html, { status, headers: { ...catalogHeaders, 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
-// Logo « Mon-Nzonzi.fr » (25/11/2026) : bordeaux sur fond clair, version blanche pour les fonds foncés.
+// Logo « MonNzonzi » (25/11/2026) : bordeaux sur fond clair, version blanche pour les fonds foncés.
 function brandLogo(light = false) {
   const file = light ? 'mon-nzonzi-clair.webp' : 'mon-nzonzi.webp';
   return siteAssets[file]
-    ? `<img class="brand-logo" src="/assets/${file}" alt="Mon Nzonzi" width="463" height="57">`
+    ? `<img class="brand-logo" src="/assets/${file}" alt="Mon Nzonzi" width="447" height="67">`
     : 'Mon Nzonzi';
 }
 
