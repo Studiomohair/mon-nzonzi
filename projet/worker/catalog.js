@@ -411,6 +411,9 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 .request-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px}
 .request .location{margin:6px 0 10px}
 .request-message{white-space:pre-wrap;overflow-wrap:anywhere}
+.request.unread{border-left:5px solid var(--bordeaux)}
+.request-read{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;color:var(--olive);font-weight:500;font-size:15px}
+.request-read .btn{min-height:42px;padding:8px 18px;font-size:15px}
 .request-contact{margin-top:12px;display:flex;flex-wrap:wrap;gap:4px 8px;overflow-wrap:anywhere}
 .gate{max-width:640px;padding:64px 0 96px}
 .gate h1{font-size:clamp(36px,4.4vw,56px);margin-top:10px}
@@ -721,6 +724,7 @@ async function sendContactRequest(request, env, profile, query) {
       values.message,
       '',
       'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
+      `Pour rassurer la famille, indiquez que vous avez lu sa demande dans votre espace : ${new URL(request.url).origin}/partenaire#demandes`,
       '',
       'L’équipe Mon Nzonzi',
     ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
@@ -734,6 +738,26 @@ async function sendContactRequest(request, env, profile, query) {
       // Nouvelle référence : la famille peut renvoyer la même demande.
       return show({ values: { ...values, reference: undefined }, error: 'Votre demande n’a pas pu être envoyée. Réessayez dans quelques minutes.' }, 502);
     }
+    // Confirmation à la famille, avec le récapitulatif (un échec n'annule pas la demande).
+    await sendMail(env, {
+      to: [values.email],
+      subject: `Votre demande a bien été transmise à ${firstName}`,
+      text: [
+        `Bonjour ${values.name},`,
+        '',
+        `Votre demande a bien été transmise à ${firstName} via Mon Nzonzi. ${firstName} vous répondra directement par email${values.phone ? ' ou par téléphone' : ''}.`,
+        'Vous recevrez aussi un email dès qu’il ou elle aura lu votre demande.',
+        '',
+        'Récapitulatif :',
+        `Ville de la cérémonie : ${values.city}`,
+        values.date ? `Date : ${formatDate.format(new Date(values.date))}` : '',
+        `Message : ${values.message}`,
+        '',
+        `Fiche de ${firstName} : ${new URL(request.url).origin}/nzonzi/${profile.slug}`,
+        '',
+        'L’équipe Mon Nzonzi',
+      ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n'),
+    });
   } catch {
     return show({ values: { ...values, reference: undefined }, error: 'Votre demande n’a pas pu être envoyée. Réessayez dans quelques minutes.' }, 503);
   }
@@ -898,6 +922,7 @@ export function adminPage() {
 .admin h1{margin:14px 0 10px}.admin section{margin-top:34px}.admin h2{margin-bottom:14px}
 .admin-list{display:grid;gap:16px}.admin-card{padding:clamp(18px,3vw,28px)}
 .admin-card dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:14px 0}.admin-card dt{color:var(--muted);font-size:13px}.admin-card dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.admin-card.late{border-left:5px solid var(--bordeaux)}
 .admin-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.admin-state{font-size:13px;font-weight:650;color:var(--brown)}
 @media(max-width:640px){.admin-card dl{grid-template-columns:1fr}.admin-card dt{margin-top:6px}}
 </style>
@@ -927,12 +952,20 @@ function render(profiles) {
     list.replaceChildren(...(items.length ? items.map(card) : [el('p', 'Aucun profil.', 'muted')]));
   }
 }
-const requestStates = { sent: 'Transmise au nzonzi', failed: 'Échec de l’envoi, à relancer à la main', pending: 'Envoi en cours' };
+const requestStates = { sent: 'Transmise, pas encore lue', failed: 'Échec de l’envoi, à relancer à la main', pending: 'Envoi en cours' };
+const LATE_MS = 48 * 3600 * 1000;
+const isLate = r => r.status === 'sent' && !r.readAt && Date.now() - new Date(r.createdAt) > LATE_MS;
+function requestState(r) {
+  if (r.readAt) return 'Lue par le nzonzi le ' + new Date(r.readAt).toLocaleString('fr-FR');
+  if (isLate(r)) return '⚠ Non lue depuis plus de 48 h · à relancer';
+  return requestStates[r.status] || r.status;
+}
 function renderRequests(requests) {
   const list = document.getElementById('list-requests');
   list.replaceChildren(...(requests.length ? requests.map(r => {
     const article = el('article', '', 'panel admin-card');
-    article.append(el('span', requestStates[r.status] || r.status, 'admin-state'), el('h3', r.name + ' → ' + r.slug));
+    if (isLate(r) || r.status === 'failed') article.classList.add('late');
+    article.append(el('span', requestState(r), 'admin-state'), el('h3', r.name + ' → ' + r.slug));
     const dl = document.createElement('dl');
     for (const [label, value] of [['Reçue le', new Date(r.createdAt).toLocaleString('fr-FR')], ['Email', r.email], ['Téléphone', r.phone], ['Ville', r.city], ['Date', r.date], ['Message', r.message]]) if (value) dl.append(el('dt', label), el('dd', value));
     article.append(dl);
@@ -973,7 +1006,8 @@ async function load(message) {
     render(data.profiles);
     renderRequests(data.requests || []);
     const pending = data.profiles.filter(p => p.status === 'pending').length;
-    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.';
+    const late = (data.requests || []).filter(isLate).length;
+    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.' + (late ? ' ' + late + ' demande' + (late > 1 ? 's' : '') + ' non lue' + (late > 1 ? 's' : '') + ' depuis plus de 48 h.' : '');
   } catch (error) { statusEl.textContent = error.message || 'Chargement impossible. Rechargez la page.'; }
 }
 load();
@@ -998,14 +1032,31 @@ function partnerRequests(requests) {
     const when = r.ceremony_date ? ' · le ' + formatDate.format(new Date(r.ceremony_date)) : '';
     const email = escapeHtml(r.family_email);
     const phone = r.family_phone ? ` · <a class="link" href="tel:${escapeHtml(r.family_phone.replace(/[^+\d]/g, ''))}">${escapeHtml(r.family_phone)}</a>` : '';
-    return `<article class="request panel"><div class="request-head"><h3>${escapeHtml(r.family_name)}</h3><span class="note">Reçue le ${formatDate.format(new Date(r.created_at))}</span></div>
+    const read = r.read_at
+      ? `<p class="request-read">Lue le ${formatDate.format(new Date(r.read_at))} · la famille a été prévenue</p>`
+      : `<p class="request-read"><button type="button" class="btn secondary mark-read" data-ref="${escapeHtml(r.reference)}">J’ai lu cette demande</button><span class="note">La famille reçoit un email pour être rassurée.</span></p>`;
+    return `<article class="request panel${r.read_at ? '' : ' unread'}"><div class="request-head"><h3>${escapeHtml(r.family_name)}</h3><span class="note">Reçue le ${formatDate.format(new Date(r.created_at))}</span></div>
       <p class="location">${icon('pin')}Cérémonie à ${escapeHtml(r.ceremony_city)}${escapeHtml(when)}</p>
       <p class="request-message">${escapeHtml(r.message)}</p>
-      <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p></article>`;
+      <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p>${read}</article>`;
   }).join('');
   return `<section class="inbox" id="demandes" aria-labelledby="requests-title">${intro}
     <p class="note">Les familles qui vous contactent depuis votre fiche. Vous recevez aussi chaque demande par email. Elles restent ici 12 mois.</p>
-    ${items || '<p class="result">Aucune demande pour le moment.</p>'}</section>`;
+    ${items || '<p class="result">Aucune demande pour le moment.</p>'}</section>
+  <script>
+  for (const button of document.querySelectorAll('.mark-read')) button.addEventListener('click', async () => {
+    button.disabled = true;
+    const box = button.closest('.request-read');
+    const article = button.closest('.request');
+    const note = box.querySelector('.note');
+    try {
+      const r = await fetch('/api/demandes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference: button.dataset.ref }) });
+      if (!r.ok) throw new Error();
+      article.classList.remove('unread');
+      box.textContent = 'Lue aujourd’hui · la famille a été prévenue';
+    } catch { button.disabled = false; note.textContent = 'Impossible pour le moment. Réessayez.'; }
+  });
+  </script>`;
 }
 
 export function partnerPage({ regions, photo = false, requests = null }) {

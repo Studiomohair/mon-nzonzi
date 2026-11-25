@@ -75,8 +75,14 @@ assert.equal(sent.length, 0);
 const ok = await post(form);
 assert.equal(ok.status, 303);
 assert.equal(ok.headers.get('Location'), '/nzonzi/elodie-nsimba?envoye=1#contact');
-assert.equal(sent.length, 1);
+assert.equal(sent.length, 2);
 assert.deepEqual(sent[0].to, [{ email: 'elodie@example.test' }]);
+assert.match(sent[0].textContent, /https:\/\/test\.example\/partenaire#demandes/);
+// Confirmation à la famille avec récapitulatif.
+assert.deepEqual(sent[1].to, [{ email: 'famille@example.test' }]);
+assert.equal(sent[1].bcc, undefined);
+assert.match(sent[1].subject, /Votre demande a bien été transmise à Élodie/);
+assert.match(sent[1].textContent, /Ville de la cérémonie : Paris/);
 assert.deepEqual(sent[0].bcc, [{ email: 'admin@example.test' }]);
 assert.deepEqual(sent[0].replyTo, { email: 'famille@example.test', name: 'Famille Mbemba' });
 assert.equal(sent[0].sender.email, 'contact@mon-nzonzi.fr');
@@ -87,7 +93,7 @@ assert.match(await page(env, '/nzonzi/' + slug + '?envoye=1'), /Merci, votre dem
 assert.equal(db.prepare('SELECT status FROM contact_requests WHERE reference = ?').get(form.reference).status, 'sent');
 // Double envoi (rechargement) : pas de second email.
 assert.equal((await post(form)).status, 303);
-assert.equal(sent.length, 1);
+assert.equal(sent.length, 2);
 
 // Échec Brevo : la famille est prévenue et peut réessayer.
 brevoUp = false;
@@ -125,6 +131,32 @@ assert.match(inbox, /href="tel:0611223344"/);
 assert.match(inbox, /Bonjour &lt;b&gt;Élodie&lt;\/b&gt;/);
 assert.match(inbox, /12 juin 2027/);
 assert.doesNotMatch(inbox, /x@x\.x/);
+assert.match(inbox, new RegExp('data-ref="' + form.reference + '"'));
+
+// « J'ai lu cette demande » : la famille est prévenue une seule fois ; un autre nzonzi ne peut pas.
+const markRead = (id, reference, from = origin) => worker.fetch(new Request(origin + '/api/demandes', { method: 'POST', headers: { ...who(id), Origin: from, 'Content-Type': 'application/json' }, body: JSON.stringify({ reference }) }), env);
+sent.length = 0;
+assert.equal((await markRead('nzonzi', form.reference, 'https://pirate.example')).status, 403);
+assert.equal((await worker.fetch(new Request(origin + '/api/demandes', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ reference: form.reference }) }), env)).status, 401);
+assert.equal((await markRead('autre', form.reference)).status, 404);
+assert.equal((await markRead('nzonzi', 'inconnue')).status, 404);
+assert.equal(sent.length, 0);
+const read = await markRead('nzonzi', form.reference);
+assert.equal(read.status, 200);
+assert.ok((await read.json()).readAt);
+assert.equal(sent.length, 1);
+assert.deepEqual(sent[0].to, [{ email: 'famille@example.test' }]);
+assert.match(sent[0].subject, /Élodie a bien lu votre demande/);
+assert.equal((await markRead('nzonzi', form.reference)).status, 200);
+assert.equal(sent.length, 1);
+assert.match(await space('nzonzi'), /Lue le .* la famille a été prévenue/);
+// Admin : lue, ou en retard après 48 h sans lecture.
+db.prepare("UPDATE contact_requests SET created_at = '2026-01-01T00:00:00.000Z' WHERE reference != ? AND status = 'sent'").run(form.reference);
+const adminView = (await (await api('/api/admin/profils', 'admin')).json()).requests;
+assert.ok(adminView.find(r => r.readAt));
+assert.ok(adminView.some(r => !r.readAt && r.status === 'sent'));
+assert.match(await (await api('/partenaire/admin', 'admin')).text(), /Non lue depuis plus de 48 h/);
+
 const other = await space('autre');
 assert.doesNotMatch(other, /Famille Mbemba/);
 assert.match(other, /dès que votre fiche sera en ligne/);
