@@ -104,7 +104,10 @@ export default {async fetch(request,env,ctx){
   if(!['GET','HEAD'].includes(request.method))return new Response('Méthode non autorisée',{status:405});
   if(request.method==='HEAD')return page(null,200,true);
   // Sans stockage R2 (binding BUCKET), le champ photo est masqué.
-  return page(partnerPage({regions,photo:Boolean(env.BUCKET)}),200,true);
+  // Demandes des familles reçues par ce nzonzi (via le slug de sa fiche), 12 derniers mois.
+  let requests=null;
+  if(env.DB){try{const mine=await env.DB.prepare('SELECT slug FROM nzozi_profiles WHERE user_id = ?').bind(id).first();if(mine?.slug){({results:requests}=await env.DB.prepare("SELECT family_name, family_email, family_phone, ceremony_city, ceremony_date, message, created_at FROM contact_requests WHERE profile_slug = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 50").bind(mine.slug).all());}}catch{requests=null;}}
+  return page(partnerPage({regions,photo:Boolean(env.BUCKET),requests}),200,true);
  }
  const catalogPage=await catalog(request,env,regions);
  if(catalogPage)return catalogPage;

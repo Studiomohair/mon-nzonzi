@@ -115,6 +115,20 @@ const admin = await (await api('/api/admin/profils', 'admin')).json();
 assert.ok(admin.requests.some(r => r.name === 'Famille Mbemba' && r.status === 'sent'));
 assert.equal((await api('/api/admin/profils', 'nzonzi')).status, 403);
 
+// Espace nzonzi : le nzonzi voit ses demandes envoyées, échappées ; les autres non.
+const space = async id => (await worker.fetch(new Request(origin + '/partenaire', { headers: who(id) }), env)).text();
+const inbox = await space('nzonzi');
+assert.match(inbox, /Mes <strong>demandes<\/strong>/);
+assert.match(inbox, /Famille Mbemba/);
+assert.match(inbox, /href="mailto:famille@example\.test"/);
+assert.match(inbox, /href="tel:0611223344"/);
+assert.match(inbox, /Bonjour &lt;b&gt;Élodie&lt;\/b&gt;/);
+assert.match(inbox, /12 juin 2027/);
+assert.doesNotMatch(inbox, /x@x\.x/);
+const other = await space('autre');
+assert.doesNotMatch(other, /Famille Mbemba/);
+assert.match(other, /dès que votre fiche sera en ligne/);
+
 // Profil non publié : pas de contact possible.
 assert.equal((await post(form, origin, '/nzonzi/inconnu')).status, 404);
 console.log('Contact famille → nzonzi, consentement, anti-spam, limite, purge, alertes admin et email de publication : OK.');

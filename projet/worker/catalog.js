@@ -405,6 +405,13 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 .preview h3{font-size:24px}
 .preview .preview-label{position:absolute;top:12px;left:12px}
 .result{display:block;margin-top:12px;padding:16px 18px;border-radius:14px;background:var(--blanc)}
+.inbox{margin-top:48px}
+.inbox h2{font-size:clamp(28px,3vw,38px);margin-bottom:8px}
+.request{padding:clamp(18px,3vw,26px);margin-top:14px}
+.request-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px}
+.request .location{margin:6px 0 10px}
+.request-message{white-space:pre-wrap;overflow-wrap:anywhere}
+.request-contact{margin-top:12px;display:flex;flex-wrap:wrap;gap:4px 8px;overflow-wrap:anywhere}
 .gate{max-width:640px;padding:64px 0 96px}
 .gate h1{font-size:clamp(36px,4.4vw,56px);margin-top:10px}
 .gate .hero-actions .link{color:var(--bordeaux)}
@@ -984,7 +991,24 @@ export function spaceGatePage(kind) {
 </div></main>`, { space: denied });
 }
 
-export function partnerPage({ regions, photo = false }) {
+function partnerRequests(requests) {
+  const intro = '<h2 id="requests-title">Mes <strong>demandes</strong></h2>';
+  if (!requests) return `<section class="inbox" id="demandes" aria-labelledby="requests-title">${intro}<p class="note">Les familles pourront vous contacter dès que votre fiche sera en ligne.</p></section>`;
+  const items = requests.map(r => {
+    const when = r.ceremony_date ? ' · le ' + formatDate.format(new Date(r.ceremony_date)) : '';
+    const email = escapeHtml(r.family_email);
+    const phone = r.family_phone ? ` · <a class="link" href="tel:${escapeHtml(r.family_phone.replace(/[^+\d]/g, ''))}">${escapeHtml(r.family_phone)}</a>` : '';
+    return `<article class="request panel"><div class="request-head"><h3>${escapeHtml(r.family_name)}</h3><span class="note">Reçue le ${formatDate.format(new Date(r.created_at))}</span></div>
+      <p class="location">${icon('pin')}Cérémonie à ${escapeHtml(r.ceremony_city)}${escapeHtml(when)}</p>
+      <p class="request-message">${escapeHtml(r.message)}</p>
+      <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p></article>`;
+  }).join('');
+  return `<section class="inbox" id="demandes" aria-labelledby="requests-title">${intro}
+    <p class="note">Les familles qui vous contactent depuis votre fiche. Vous recevez aussi chaque demande par email. Elles restent ici 12 mois.</p>
+    ${items || '<p class="result">Aucune demande pour le moment.</p>'}</section>`;
+}
+
+export function partnerPage({ regions, photo = false, requests = null }) {
   const field = (label, name, attrs = '', extra = '') => `<label class="field${extra}"><span>${label}</span><input name="${name}" ${attrs}></label>`;
   const req = ' <span aria-hidden="true">*</span>';
   const opt = ' <span class="optional">(facultatif)</span>';
@@ -1041,6 +1065,7 @@ export function partnerPage({ regions, photo = false }) {
       </div>
     </aside>
   </div>
+  ${partnerRequests(requests)}
 </div></main>
 <script>
 const fmt=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'});const input=document.getElementById('net');function familyPrice(n){const net=Math.round(n*100);const total=Math.round(net/0.85);return {total:total/100,fee:(total-net)/100};}function validRate(val){const n=Number(val);return String(val).trim()!==''&&Number.isFinite(n)&&n>=1&&n<=100000&&Math.abs(n*100-Math.round(n*100))<0.000001;}function update(){const val=input.value;const valid=validRate(val);document.getElementById('calc-error').hidden=valid||String(val).trim()==='';input.setAttribute('aria-invalid',String(!valid&&String(val).trim()!==''));document.getElementById('total-value').textContent='—';document.getElementById('fee-value').textContent='—';if(!valid)return;const p=familyPrice(Number(val));document.getElementById('total-value').textContent=fmt.format(p.total);document.getElementById('fee-value').textContent=fmt.format(p.fee);}input.addEventListener('input',update);update();
