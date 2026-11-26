@@ -300,6 +300,56 @@ sent.length = 0;
 assert.equal((await api('/api/reservations', 'nzonzi', 'POST', { action: 'decline', reference: third })).status, 200);
 assert.match(sent[0].subject, /n’est pas disponible/);
 
+// Messagerie : coordonnées masquées tant que l'acompte n'est pas payé.
+sent.length = 0;
+const fourth = await contact({ email: 'quatre@example.test', nom: 'Famille Loemba', date: isoDay(90), message: 'Appelez-moi au 06 12 34 56 78 ou famille.loemba@gmail.com, cérémonie le 12/06/2027 pour 300 €.' });
+const nzMail = sent.find(m => m.to.some(t => t.email === 'elodie@example.test'));
+assert.ok(nzMail, 'le nzonzi est prévenu');
+assert.doesNotMatch(nzMail.htmlContent, /06 12 34 56 78|loemba@gmail|quatre@example\.test/);
+assert.ok(!nzMail.replyTo, 'pas de réponse directe à la famille');
+const famMail = sent.find(m => m.to.some(t => t.email === 'quatre@example.test'));
+const talkLink = famMail.htmlContent.match(/\/echange\/([A-Za-z0-9_-]+)/);
+assert.ok(talkLink, 'lien de messagerie dans la confirmation de la famille');
+html = await page('/partenaire', 'nzonzi');
+assert.match(html, /\[coordonnées masquées\]/);
+assert.match(html, /12\/06\/2027 pour 300 €/, 'dates et prix non masqués');
+assert.doesNotMatch(html, /06 12 34 56 78|loemba@gmail|quatre@example\.test/);
+sent.length = 0;
+r = await api('/api/messages', 'nzonzi', 'POST', { reference: fourth, body: 'Bonjour ! Écrivez-moi sur elodie arobase gmail point com ou au +33 6 11 22 33 44, wa.me/33611223344' });
+assert.equal(r.status, 200);
+let saved = db.prepare('SELECT * FROM messages WHERE reference = ? ORDER BY id DESC').get(fourth);
+assert.equal(saved.sender, 'nzonzi');
+assert.equal(saved.masked, 1);
+assert.doesNotMatch(saved.body, /gmail|33 6 11|wa\.me/);
+assert.match(saved.body, /^Bonjour ! /);
+assert.match(sent[0].htmlContent, new RegExp('/echange/' + talkLink[1]));
+assert.equal((await api('/api/messages', 'autre', 'POST', { reference: fourth, body: 'Bonjour' })).status, 404, 'un autre compte ne peut pas écrire');
+assert.equal((await api('/api/messages', 'nzonzi', 'POST', { reference: fourth, body: '   ' })).status, 400);
+// Côté famille.
+const talkPath = '/echange/' + talkLink[1];
+html = await page(talkPath);
+assert.match(html, /Écrivez-moi sur/);
+assert.match(html, /Appelez-moi au \[coordonnées masquées\]/);
+assert.equal((await page('/echange/' + 'x'.repeat(30))).includes('Écrivez-moi'), false);
+sent.length = 0;
+r = await form(talkPath, { body: 'Merci, mon numéro : 0612345678.' });
+assert.equal(r.status, 303);
+assert.match(r.headers.get('Location'), /envoye=1&masque=1/);
+assert.match(sent[0].to[0].email, /elodie@example\.test/);
+assert.doesNotMatch(sent[0].htmlContent, /0612345678/);
+assert.match(sent[0].htmlContent, /partenaire#demande-/);
+r = await worker.fetch(new Request(origin + talkPath, { method: 'POST', headers: { Origin: 'https://ailleurs.example', 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'body=coucou' }), env);
+assert.equal(r.status, 403);
+// Limite de messages par jour.
+for (let i = db.prepare("SELECT COUNT(*) AS n FROM messages WHERE reference = ? AND sender = 'family'").get(fourth).n; i < 20; i++) assert.equal((await form(talkPath, { body: 'Message ' + i })).status, 303);
+assert.equal((await form(talkPath, { body: 'Un de trop' })).status, 429);
+// Après l'acompte (réservation proche payée), plus de masquage.
+r = await api('/api/messages', 'nzonzi', 'POST', { reference: near, body: 'Mon numéro : 06 11 22 33 44' });
+assert.equal(r.status, 200);
+saved = db.prepare('SELECT * FROM messages WHERE reference = ? ORDER BY id DESC').get(near);
+assert.equal(saved.masked, 0);
+assert.match(saved.body, /06 11 22 33 44/);
+
 // CGU : section paiement seulement quand les paiements sont ouverts à tous.
 assert.match(await page('/cgu', null, { ...env, PAYMENTS_ENABLED: 'true' }), /Paiement, annulation et remboursement/);
 assert.doesNotMatch(await page('/cgu', null, env), /Paiement, annulation et remboursement/);
