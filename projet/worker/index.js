@@ -113,7 +113,7 @@ async fetch(request,env,ctx){
     const readAt=new Date().toISOString();
     await env.DB.prepare('UPDATE contact_requests SET read_at = ? WHERE reference = ? AND read_at IS NULL').bind(readAt,reference).run();
     const nz=JSON.parse(row.published_json||row.profile_json);
-    await background(ctx,sendMail(env,{to:[row.family_email],subject:nz.firstName+' a bien reçu votre demande',text:'Bonjour '+row.family_name+',\n\n'+nz.firstName+' '+nz.lastName+' a bien reçu votre demande envoyée via Mon Nzonzi et va vous répondre directement.\n\nSa fiche : '+url.origin+'/nzonzi/'+row.slug+'\n\nL’équipe Mon Nzonzi'}));
+    await background(ctx,sendMail(env,{to:[row.family_email],subject:nz.firstName+' a bien reçu votre demande',text:'Bonjour '+row.family_name+',\n\n'+nz.firstName+' '+nz.lastName+' a bien reçu votre demande envoyée via Mon Nzonzi et va vous répondre.\n\nSa fiche : '+url.origin+'/nzonzi/'+row.slug+'\n\nL’équipe Mon Nzonzi'}));
     return json({readAt});
    }catch{return json({error:'Action impossible pour le moment. Réessayez.'},503);}
   }
@@ -141,7 +141,8 @@ async fetch(request,env,ctx){
   if(env.DB){try{const mine=await env.DB.prepare('SELECT slug FROM nzozi_profiles WHERE user_id = ?').bind(id).first();if(mine?.slug){({results:requests}=await env.DB.prepare("SELECT reference, family_name, family_email, family_phone, ceremony_city, ceremony_venue, ceremony_address, ceremony_date, message, created_at, read_at FROM contact_requests WHERE profile_slug = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 50").bind(mine.slug).all());}}catch{requests=null;}}
   // Réservations payantes (si activées pour ce nzonzi) : bouton Accepter/Refuser sous chaque demande.
   const bookings=await partnerBookings(env,url,id,email,requests);
-  if(requests)requests=requests.map(r=>({...r,extra:bookings.extras.get(r.reference)||''}));
+  // Coordonnées de la famille masquées jusqu'au paiement de l'acompte.
+  if(requests)requests=requests.map(r=>({...r,extra:bookings.extras.get(r.reference)||'',masked:bookings.masked(r.reference)}));
   return page(partnerPage({regions,photo:Boolean(env.BUCKET),requests,payments:bookings.section}),200,true);
  }
  const catalogPage=await catalog(request,env,regions);

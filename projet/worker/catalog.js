@@ -851,6 +851,7 @@ function contactForm(profile, url, state) {
           <label class="field" id="address-field"${ADDRESS_VENUES.includes(values.venue) ? '' : ' hidden'}><span id="address-label">${values.venue === 'Domicile familial' ? 'Adresse du domicile' : 'Adresse de la salle'}</span><input name="adresse" maxlength="200" autocomplete="street-address" placeholder="Numéro, rue, code postal" value="${escapeHtml(values.address || '')}"></label>
           <label class="field"><span>Date <span class="optional">(facultatif)</span></span><input type="date" name="date" value="${escapeHtml(values.date || '')}"></label>
           <label class="field">Votre message<textarea name="message" maxlength="2000" required placeholder="Présentez votre famille et votre projet de cérémonie.">${escapeHtml(values.message || '')}</textarea></label>
+          ${state.masked ? `<p class="muted">Pour votre sécurité, votre email et votre téléphone ne sont transmis à ${firstName} qu’après la réservation (paiement de l’acompte sur Mon Nzonzi). Inutile de les écrire dans le message.</p>` : ''}
           <label class="check"><input type="checkbox" name="accord" value="oui" required${values.consent ? ' checked' : ''}><span>J’accepte que mes coordonnées et mon message soient transmis à ${firstName} et à l’équipe Mon Nzonzi. <a href="/confidentialite" target="_blank">En savoir plus</a></span></label>
           <button class="btn" type="submit">Envoyer ${icon('arrow')}</button>
         </form>
@@ -875,7 +876,7 @@ function contactSection(profile, url, state, env) {
   const body = state.sent
     ? `<h2 id="contact-title">Contacter ${firstName}</h2><div class="feedback" role="status"><p><strong>Merci, votre demande a été envoyée.</strong></p><p>${firstName} vous répondra directement par email.</p></div>`
     : mailEnabled(env)
-      ? contactForm(profile, url, state)
+      ? contactForm(profile, url, { ...state, masked: state.masked ?? paymentsPublic(env) })
       : `<h2 id="contact-title">Contacter ${firstName}</h2><p class="muted">La prise de contact en ligne ouvre très bientôt.</p>`;
   return `<section class="panel contact" id="contact" aria-labelledby="contact-title">
         <p class="kicker">Prix total</p><strong class="price">${profilePrice(profile)}</strong>
@@ -954,7 +955,9 @@ async function sendContactRequest(request, env, profile, query) {
   if (!values.consent) return error('Cochez la case pour accepter la transmission de votre demande.');
   const now = new Date();
   try {
-    const row = await env.DB.prepare('SELECT published_json FROM nzozi_profiles WHERE slug = ? AND published_json IS NOT NULL').bind(profile.slug).first();
+    const row = await env.DB.prepare('SELECT published_json, email FROM nzozi_profiles WHERE slug = ? AND published_json IS NOT NULL').bind(profile.slug).first();
+    // Réservations payantes : coordonnées de la famille masquées jusqu'au paiement de l'acompte.
+    const masked = Boolean(row) && bookingsActiveFor(env, row.email);
     const to = row ? String(JSON.parse(row.published_json).contactEmail || '') : '';
     if (!to) return show({ values, error: 'Ce nzonzi ne peut pas être contacté pour le moment.' }, 503);
     const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -974,8 +977,8 @@ async function sendContactRequest(request, env, profile, query) {
       `Une famille vous contacte via Mon Nzonzi pour une cérémonie de dot.`,
       '',
       `Nom : ${values.name}`,
-      `Email : ${values.email}`,
-      values.phone ? `Téléphone : ${values.phone}` : '',
+      masked ? '' : `Email : ${values.email}`,
+      values.phone && !masked ? `Téléphone : ${values.phone}` : '',
       `Lieu de la cérémonie : ${venueLabel(values.venue, values.city)}`,
       values.address ? `Adresse : ${values.address}` : '',
       values.date ? `Date : ${formatDate.format(new Date(values.date))}` : '',
@@ -983,15 +986,15 @@ async function sendContactRequest(request, env, profile, query) {
       'Message :',
       values.message,
       '',
-      'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
-      `Pour rassurer la famille, indiquez-lui que vous avez bien reçu sa demande depuis votre espace : ${new URL(request.url).origin}/partenaire#demandes`,
+      masked ? `Pour répondre, acceptez la demande (date et prix) ou refusez-la depuis votre espace : ${new URL(request.url).origin}/partenaire#demandes` : 'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
+      masked ? 'L’email et le téléphone de la famille vous seront communiqués dès qu’elle aura payé l’acompte sur Mon Nzonzi.' : `Pour rassurer la famille, indiquez-lui que vous avez bien reçu sa demande depuis votre espace : ${new URL(request.url).origin}/partenaire#demandes`,
       '',
       'L’équipe Mon Nzonzi',
     ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
     const origin = new URL(request.url).origin;
     const dateLabel = values.date ? formatDate.format(new Date(values.date)) : 'À définir';
     const details = mailDetails([
-      ['Famille', values.name], ['Email', values.email], ['Téléphone', values.phone],
+      ['Famille', values.name], ['Email', masked ? '' : values.email], ['Téléphone', masked ? '' : values.phone],
       ['Ville', values.city], ['Lieu', values.venue], ['Adresse', values.address], ['Date', dateLabel],
     ]);
     const html = `<p style="margin:0 0 6px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:${mailColors.olive}">Nouvelle demande</p>
@@ -1000,13 +1003,14 @@ async function sendContactRequest(request, env, profile, query) {
 ${details}
 <p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Son message</p>
 <div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(values.message)}</div>
-<p style="margin:0 0 10px">${mailButton('Répondre à la famille', `mailto:${values.email}?subject=${encodeURIComponent('Votre demande sur Mon Nzonzi')}`)}</p>
+${masked ? `<p style="margin:0 0 22px">${mailButton('Accepter ou refuser la demande', origin + '/partenaire#demandes')}</p>
+<p style="margin:0;color:${mailColors.olive};font-size:13px">Depuis votre espace, confirmez la date et le prix : la famille réserve en payant l’acompte sur Mon Nzonzi. Son email et son téléphone vous sont alors communiqués.</p>` : `<p style="margin:0 0 10px">${mailButton('Répondre à la famille', `mailto:${values.email}?subject=${encodeURIComponent('Votre demande sur Mon Nzonzi')}`)}</p>
 <p style="margin:0 0 22px">${mailButton('Confirmer la réception à la famille', origin + '/partenaire#demandes', true)}</p>
-<p style="margin:0;color:${mailColors.olive};font-size:13px">Vous pouvez aussi simplement répondre à cet email : votre réponse arrive directement chez la famille. En confirmant la réception depuis votre espace, la famille est rassurée.</p>`;
+<p style="margin:0;color:${mailColors.olive};font-size:13px">Vous pouvez aussi simplement répondre à cet email : votre réponse arrive directement chez la famille. En confirmant la réception depuis votre espace, la famille est rassurée.</p>`}`;
     const sent = await sendMail(env, {
       to: [to], bcc: adminEmails(env),
       subject: `Nouvelle demande de ${values.name} · ${values.city}`,
-      text, html, replyTo: { email: values.email, name: values.name },
+      text, html, ...(masked ? {} : { replyTo: { email: values.email, name: values.name } }),
     });
     await env.DB.prepare('UPDATE contact_requests SET status = ? WHERE reference = ?').bind(sent ? 'sent' : 'failed', values.reference).run();
     if (!sent) {
@@ -1018,7 +1022,7 @@ ${details}
       to: [values.email],
       subject: `Votre demande a bien été transmise à ${firstName}`,
       html: `<h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;font-weight:normal">Merci ${escapeHtml(values.name)}, <strong>votre demande est bien partie.</strong></h1>
-<p style="margin:0 0 6px">${escapeHtml(firstName)} l’a reçue par email et vous répondra directement${values.phone ? ' par email ou par téléphone' : ' par email'}. Vous recevrez aussi un message dès qu’il ou elle aura confirmé la réception.</p>
+<p style="margin:0 0 6px">${masked ? `${escapeHtml(firstName)} l’a reçue et vous répondra sur Mon Nzonzi : vous recevrez un email dès qu’il ou elle aura accepté (avec la date et le prix) ou décliné votre demande. Vos coordonnées ne lui sont transmises qu’après votre réservation.` : `${escapeHtml(firstName)} l’a reçue par email et vous répondra directement${values.phone ? ' par email ou par téléphone' : ' par email'}. Vous recevrez aussi un message dès qu’il ou elle aura confirmé la réception.`}</p>
 ${mailDetails([['Nzonzi', profile.name], ['Ville', values.city], ['Lieu', values.venue], ['Adresse', values.address], ['Date', dateLabel]])}
 <p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Votre message</p>
 <div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(values.message)}</div>
@@ -1026,8 +1030,8 @@ ${mailDetails([['Nzonzi', profile.name], ['Ville', values.city], ['Lieu', values
       text: [
         `Bonjour ${values.name},`,
         '',
-        `Votre demande a bien été transmise à ${firstName} via Mon Nzonzi. ${firstName} vous répondra directement par email${values.phone ? ' ou par téléphone' : ''}.`,
-        'Vous recevrez aussi un email dès qu’il ou elle aura confirmé la réception de votre demande.',
+        masked ? `Votre demande a bien été transmise à ${firstName} via Mon Nzonzi. Vous recevrez un email dès qu’il ou elle l’aura acceptée (avec la date et le prix) ou déclinée. Vos coordonnées ne lui sont transmises qu’après votre réservation.` : `Votre demande a bien été transmise à ${firstName} via Mon Nzonzi. ${firstName} vous répondra directement par email${values.phone ? ' ou par téléphone' : ''}.`,
+        masked ? '' : 'Vous recevrez aussi un email dès qu’il ou elle aura confirmé la réception de votre demande.',
         '',
         'Récapitulatif :',
         `Lieu de la cérémonie : ${venueLabel(values.venue, values.city)}`,
@@ -1346,6 +1350,19 @@ export async function reviewsAdminApi(request, env, url) {
 // ——— Paiements en ligne (Stripe Connect, voir worker/payments.js) ———
 // La section des CGU n'apparaît qu'une fois les paiements ouverts à tous (PAYMENTS_ENABLED="true").
 // Pendant les tests (PAYMENTS_TEST_EMAILS), les règles sont affichées sur la page de paiement.
+// Mode de la clé Stripe : 'test', 'live' (seulement si PAYMENTS_LIVE="true") ou null.
+export function stripeKeyMode(env) {
+  const key = String(env?.STRIPE_SECRET_KEY || '');
+  if (/^(sk|rk)_test_/.test(key)) return 'test';
+  if (/^(sk|rk)_live_/.test(key)) return env?.PAYMENTS_LIVE === 'true' ? 'live' : null;
+  return null;
+}
+// Réservations payantes actives pour ce nzonzi (email de connexion) : tous si PAYMENTS_ENABLED, sinon les testeurs.
+// Dans ce cas, l'email et le téléphone de la famille et du nzonzi restent masqués jusqu'au paiement de l'acompte.
+export function bookingsActiveFor(env, loginEmail) {
+  if (!stripeKeyMode(env)) return false;
+  return env.PAYMENTS_ENABLED === 'true' || String(env.PAYMENTS_TEST_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean).includes(String(loginEmail || '').toLowerCase());
+}
 export function paymentsPublic(env) {
   return env?.PAYMENTS_ENABLED === 'true' && Boolean(env?.STRIPE_SECRET_KEY);
 }
@@ -1367,8 +1384,8 @@ export function paymentRulesHtml() {
     <li><strong>Paiement en dehors du site</strong> : une famille et un nzonzi qui se sont trouvés sur Mon Nzonzi s’engagent à réserver et payer la prestation sur Mon Nzonzi. Un paiement fait en dehors du site n’est pas protégé.</li>
     <li><strong>Reçu</strong> : la famille et le nzonzi reçoivent un email de confirmation à chaque paiement.</li>
     <li><strong>Droit de rétractation</strong> : la famille peut se rétracter dans les ${r.withdrawalDays} jours qui suivent le paiement et être remboursée intégralement. Si la cérémonie a lieu avant la fin de ce délai, la famille demande, en payant, que la prestation soit réalisée avant cette date : une fois la cérémonie passée, la rétractation n’est plus possible.</li>
-    <li><strong>Annulation par le nzonzi</strong> : la famille est remboursée intégralement, quelle que soit la date.</li>
-    <li><strong>Annulation par la famille</strong> : plus de ${r.fullRefundDays} jours avant la cérémonie, remboursement intégral ; entre ${r.fullRefundDays} et ${r.halfRefundDays} jours avant, remboursement de 50 % des sommes versées ; moins de ${r.halfRefundDays} jours avant, aucun remboursement, sauf accord du nzonzi.</li>
+    <li><strong>Annulation ou absence du nzonzi</strong> : la famille est remboursée intégralement (acompte et solde), quelle que soit la date.</li>
+    <li><strong>Annulation par la famille</strong> : pendant le délai de rétractation, tout est remboursé. Ensuite, l’acompte reste acquis au nzonzi, qui a déjà engagé des frais. Le solde déjà payé est remboursé intégralement si l’annulation a lieu plus de ${r.fullRefundDays} jours avant la cérémonie, à 50 % entre ${r.fullRefundDays} et ${r.halfRefundDays} jours avant, et n’est pas remboursé à moins de ${r.halfRefundDays} jours, sauf accord du nzonzi.</li>
     <li><strong>Demander un remboursement</strong> : écrivez à ${contactLink()} en indiquant la référence du paiement. Le remboursement est fait sur la carte utilisée, en général sous 14 jours. Le délai d’arrivée sur le compte dépend ensuite de la banque.</li>
   </ul>`;
 }
@@ -1736,7 +1753,7 @@ function partnerRequests(requests) {
       <p class="location">${icon('pin')}Cérémonie : ${escapeHtml(place)}${escapeHtml(when)}</p>
       ${r.ceremony_address ? `<p class="note request-address">Adresse : ${escapeHtml(r.ceremony_address)}</p>` : ''}
       <p class="request-message">${escapeHtml(r.message)}</p>
-      <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p>${read}${r.extra || ''}</article>`;
+      ${r.masked ? '<p class="note request-contact">Email et téléphone de la famille visibles dès qu’elle aura payé l’acompte.</p>' : `<p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p>`}${read}${r.extra || ''}</article>`;
   }).join('');
   return `<section class="inbox" id="demandes" aria-labelledby="requests-title">${intro}
     <p class="note">Les familles qui vous contactent depuis votre fiche. Vous recevez aussi chaque demande par email. Elles restent ici 12 mois.</p>
