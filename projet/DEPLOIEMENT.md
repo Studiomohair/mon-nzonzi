@@ -32,7 +32,7 @@ navigateur et ne le recrée qu'à partir d'un jeton Cloudflare Access vérifié
 ## Contrôles
 ```bash
 bash scripts/build.sh
-for s in directory profile photo partner access admin contact blog; do node scripts/check-$s.mjs; done
+for s in directory profile photo partner access admin contact blog reviews; do node scripts/check-$s.mjs; done
 npx wrangler deploy --dry-run   # vérifie l'assemblage Cloudflare
 ```
 
@@ -93,3 +93,11 @@ tant qu'elles sont vides, la page affiche « … à compléter ».
 - Chaque page publique a une description, une adresse canonique (`https://mon-nzonzi.fr/...`), des balises de partage (image `/assets/partage.png`) et des données structurées (Article, FAQ, fil d'Ariane).
 - `/sitemap.xml` liste l'accueil, le blog, les articles et les fiches validées.
 - **Le site reste caché des moteurs** (`noindex` + `robots.txt` qui bloque tout) tant que `SEARCH_INDEXING = false` en haut de `worker/catalog.js`. Au lancement, et seulement avec l'accord de la propriétaire : passer à `true`, fusionner, puis déclarer `https://mon-nzonzi.fr/sitemap.xml` dans Google Search Console. L'espace nzonzi, l'admin et les API restent toujours exclus.
+
+## Avis des familles
+
+- Seules les familles qui ont contacté un nzonzi avec le formulaire de sa fiche (demande transmise) sont invitées. Une tâche planifiée Cloudflare (`[triggers]` dans `wrangler.toml`, chaque jour à 8 h UTC) leur envoie un lien personnel par email 2 jours après la date de la cérémonie, ou 45 jours après la demande sans date. Une seule invitation par demande, et par famille et nzonzi. Le lien vaut 90 jours ; seule son empreinte SHA-256 est stockée.
+- Formulaire public : `/avis/<lien>` (note de 1 à 5, commentaire, nom affiché, case de confirmation). Il n'est pas sous `/api` ni `/partenaire`, donc hors Cloudflare Access.
+- Validation sur `/partenaire/admin` (section « Avis des familles », API `/api/admin/avis`) : publier, refuser ou retirer avec un motif ; la famille reçoit le motif par email, le nzonzi est prévenu quand un avis est publié. Le bouton « Envoyer maintenant les invitations prévues » lance la tâche sans attendre.
+- La note moyenne et les avis publiés s'affichent sur la fiche et sur les cartes de l'annuaire. Règles publiées dans les CGU (`/cgu#avis`).
+- La migration `0006_reviews.sql` est appliquée automatiquement au déploiement. Sans Brevo, aucune invitation ne part.

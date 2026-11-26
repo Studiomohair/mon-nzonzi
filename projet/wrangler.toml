@@ -9,6 +9,11 @@ workers_dev = true
 [build]
 command = "bash scripts/build.sh"
 
+# Chaque jour vers 10 h (heure de Paris) : envoi des invitations à donner un avis
+# aux familles dont la cérémonie a eu lieu (voir worker/catalog.js, « Avis des familles »).
+[triggers]
+crons = ["0 8 * * *"]
+
 [observability]
 enabled = true
 

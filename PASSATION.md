@@ -68,3 +68,6 @@ Prochain objectif fonctionnel ; maintien ou changement d’hébergement ; authen
 ## Mise à jour du 26/11/2026 (blog)
 - Blog pédagogique `/blog` (5 articles : nzonzi, kinzonzi, dot, étapes du mariage en RDC, qui peut faire le kinzonzi), lien dans l'en-tête, le pied de page et un aperçu sur l'accueil.
 - SEO prêt (meta, canonique, Open Graph, JSON-LD, `/sitemap.xml`, `/robots.txt`) mais noindex conservé : interrupteur `SEARCH_INDEXING` dans `worker/catalog.js`. Voir `projet/DEPLOIEMENT.md`.
+
+## Mise à jour du 26/11/2026 (avis des familles)
+- Avis vérifiés : invitation par email après la cérémonie (tâche planifiée quotidienne), formulaire `/avis/<lien>`, validation dans `/partenaire/admin`, note moyenne et avis sur les fiches et l'annuaire. Table `reviews` (migration 0006). Détails dans `projet/DEPLOIEMENT.md`, contrôle `scripts/check-reviews.mjs`.

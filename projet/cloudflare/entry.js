@@ -83,4 +83,8 @@ export default {
   async fetch(request, env, ctx) {
     return worker.fetch(await withVerifiedIdentity(request, env), env, ctx);
   },
+  // Tâche planifiée (wrangler.toml) : invitations des familles à donner leur avis.
+  async scheduled(event, env, ctx) {
+    return worker.scheduled(event, env, ctx);
+  },
 };

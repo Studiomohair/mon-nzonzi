@@ -15,7 +15,7 @@ if (!catalogSource.includes(blogImport)) throw new Error('Worker assembly marker
 const blog = await readFile(fromRoot('worker/blog.js'), 'utf8');
 const catalog = catalogSource.replace(blogImport, () => blog);
 const entry = await readFile(fromRoot('worker/index.js'), 'utf8');
-const catalogImport = "import { adminEmails, adminPage, catalog, partnerPage, sendMail, spaceGatePage } from './catalog.js';";
+const catalogImport = "import { adminEmails, adminPage, catalog, partnerPage, reviewsAdminApi, sendMail, sendReviewInvitations, spaceGatePage } from './catalog.js';";
 const assetMarker = '/* SITE_ASSETS */ {}';
 if (!entry.includes(catalogImport) || !catalog.includes(assetMarker)) throw new Error('Worker assembly marker missing.');
 const bundledCatalog = catalog.replace(/^export /gm, '').replace(assetMarker, () => JSON.stringify(assets));
