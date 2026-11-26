@@ -1,4 +1,4 @@
-import { PAYMENT_RULES, SITE_ORIGIN, adminEmails, bookingsActiveFor, stripeKeyMode, catalogHeaders, escapeHtml, formatDate, icon, layout, mailButton, mailDetails, paymentRulesHtml, sendMail } from './catalog.js';
+import { PAYMENT_RULES, SITE_ORIGIN, adminEmails, bookingsActiveFor, conversationToken, mailColors, maskContacts, stripeKeyMode, catalogHeaders, escapeHtml, formatDate, icon, layout, mailButton, mailDetails, paymentRulesHtml, sendMail } from './catalog.js';
 
 // ——— Réservation et paiement sur la plateforme (Stripe Connect, comptes Express) ———
 // 1. La famille envoie une demande depuis la fiche (formulaire existant).
@@ -177,8 +177,10 @@ export async function partnerBookings(env, url, userId, email, requests) {
   for (const b of bookings) if (!latest.has(b.reference)) latest.set(b.reference, b);
   const extras = new Map();
   const unmasked = new Set();   // demandes dont l'acompte est payé : coordonnées visibles
+  const talks = new Map();      // messagerie sous chaque demande
   for (const r of requests || []) {
     const b = latest.get(r.reference);
+    talks.set(r.reference, await talkBlockForNzonzi(env, r.reference, r.family_name, Boolean(b && b.deposit_paid_at && b.status !== 'refunded')));
     if (b && b.deposit_paid_at && b.status !== 'refunded') unmasked.add(r.reference);
     if (b && b.status !== 'cancelled' && b.status !== 'declined') { extras.set(r.reference, payBookingState(b)); continue; }
     const again = b ? `<p class="note">${b.status === 'declined' ? 'Vous avez refusé cette demande.' : 'La réservation précédente a été annulée.'}</p>` : '';
@@ -273,7 +275,8 @@ export async function partnerBookings(env, url, userId, email, requests) {
     });
   })();
   </script>`;
-  return { section, extras, masked: reference => !unmasked.has(reference) };
+  for (const [reference, html] of talks) extras.set(reference, (extras.get(reference) || '') + html);
+  return { section: section + `<style>${TALK_CSS}</style>${TALK_SCRIPT}`, extras, masked: reference => !unmasked.has(reference) };
 }
 function payBookingState(b) {
   const day = v => formatDate.format(new Date(v));
@@ -390,7 +393,7 @@ export async function partnerPaymentsApi(request, env, url, ctx, userId, email) 
 }
 
 async function payBooking(env, where, ...args) {
-  return env.DB.prepare(`SELECT b.*, p.published_json, p.profile_json, c.family_phone FROM bookings b LEFT JOIN nzozi_profiles p ON p.user_id = b.user_id LEFT JOIN contact_requests c ON c.reference = b.reference WHERE ${where}`).bind(...args).first();
+  return env.DB.prepare(`SELECT b.*, p.published_json, p.profile_json, c.family_phone, t.token AS talk_token FROM bookings b LEFT JOIN nzozi_profiles p ON p.user_id = b.user_id LEFT JOIN contact_requests c ON c.reference = b.reference LEFT JOIN conversations t ON t.reference = b.reference WHERE ${where}`).bind(...args).first();
 }
 const payNz = row => { try { return JSON.parse(row.published_json || row.profile_json); } catch { return { firstName: 'Votre nzonzi', lastName: '' }; } };
 const testLine = test => test ? '<p style="margin:0 0 14px;padding:10px 14px;border:1px dashed #8C3D20;border-radius:10px;background:#F3E1D9;font-size:13px"><strong>Mode test</strong> · aucun vrai paiement.</p>' : '';
@@ -551,6 +554,7 @@ function payView(row, state = {}) {
   return layout('Ma réservation', `<main class="legal pay" id="main"><div class="shell">
   <p class="kicker">Réservation · paiement protégé</p>
   <h1>Votre cérémonie avec ${escapeHtml(who)}</h1>
+  ${row.talk_token ? `<p><a class="btn secondary" href="/echange/${escapeHtml(row.talk_token)}">Écrire à ${escapeHtml(nz.firstName)}</a></p>` : ''}
   ${test ? '<p class="pay-test" role="note"><strong>Mode test</strong> · aucun vrai paiement. Carte de test : 4242 4242 4242 4242, date future, n’importe quel code.</p>' : ''}
   <section class="panel pay-summary">
     <p class="kicker">Total</p><strong class="price">${payEuro(row.amount_cents)}</strong>
@@ -958,4 +962,140 @@ export function adminPaymentsSection(env) {
     load();
   })();
   </script>`;
+}
+
+// ——— Messagerie famille ↔ nzonzi (réservations payantes) ———
+// La famille écrit depuis /echange/<lien> (lien reçu par email), le nzonzi depuis « Mes demandes ».
+// Tant que l'acompte n'est pas payé, emails, numéros, liens et pseudos tapés dans un message sont masqués.
+const MESSAGE_MAX = 2000;
+const MESSAGES_PER_DAY = 20;        // par personne et par conversation
+async function talkUnmasked(env, reference) {
+  const b = await env.DB.prepare("SELECT 1 AS ok FROM bookings WHERE reference = ? AND deposit_paid_at IS NOT NULL AND status != 'refunded' LIMIT 1").bind(reference).first();
+  return Boolean(b);
+}
+async function talkMessages(env, reference) {
+  const { results } = await env.DB.prepare('SELECT sender, body, masked, created_at FROM messages WHERE reference = ? ORDER BY id LIMIT 300').bind(reference).all();
+  return results;
+}
+function talkThread(messages, me, names) {
+  if (!messages.length) return `<p class="note">Aucun message pour le moment.</p>`;
+  return `<ol class="talk-thread">${messages.map(m => `<li class="talk-msg${m.sender === me ? ' mine' : ''}"><span class="talk-meta">${escapeHtml(m.sender === me ? 'Vous' : names[m.sender] || '')} · ${new Date(m.created_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' })}</span><p>${escapeHtml(m.body)}</p></li>`).join('')}</ol>`;
+}
+const TALK_CSS = `.talk{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:grid;gap:10px}
+.talk h4{font-size:17px}
+.talk-thread{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.talk-msg{max-width:min(560px,92%);padding:10px 14px;border-radius:16px 16px 16px 4px;background:var(--blanc);border:1px solid var(--line)}
+.talk-msg.mine{justify-self:end;border-radius:16px 16px 4px 16px;background:var(--success)}
+.talk-msg p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:2px}
+.talk-meta{font-size:12px;color:var(--muted)}
+.talk form{display:grid;gap:8px}.talk textarea{min-height:90px}.talk .btn{justify-self:start;min-height:42px;padding:8px 18px;font-size:15px}`;
+// Bloc « Messages » sous une demande, dans l'espace du nzonzi.
+async function talkBlockForNzonzi(env, reference, familyName, unmasked) {
+  const messages = await talkMessages(env, reference);
+  return `<div class="talk" id="demande-${escapeHtml(reference)}"><h4>Messages avec ${escapeHtml(familyName)}</h4>
+    ${talkThread(messages, 'nzonzi', { family: familyName })}
+    <form class="talk-form" data-ref="${escapeHtml(reference)}"><label class="field"><span>Votre message</span><textarea name="body" maxlength="${MESSAGE_MAX}" required placeholder="Posez vos questions sur la cérémonie : déroulé, nombre de personnes, horaires…"></textarea></label>
+    ${unmasked ? '' : '<p class="note">Pour la sécurité de tous, les emails, numéros de téléphone et liens sont masqués jusqu’au paiement de l’acompte.</p>'}
+    <button class="btn secondary" type="submit">Envoyer</button><p class="talk-status note" role="status" aria-live="polite"></p></form></div>`;
+}
+const TALK_SCRIPT = `<script>
+(() => {
+  for (const form of document.querySelectorAll('.talk-form')) form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const status = form.querySelector('.talk-status'), button = form.querySelector('button'), body = form.elements.body.value.trim();
+    if (!body) { form.elements.body.focus(); return; }
+    button.disabled = true; status.textContent = 'Envoi…';
+    try {
+      const r = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference: form.dataset.ref, body }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Envoi impossible. Réessayez.');
+      window.location.hash = 'demande-' + form.dataset.ref; window.location.reload();
+    } catch (error) { status.textContent = error.message; button.disabled = false; }
+  });
+})();
+</script>`;
+async function talkSave(env, reference, sender, raw, unmasked) {
+  const text = String(raw || '').trim().slice(0, MESSAGE_MAX);
+  if (!text) return { error: 'Écrivez votre message.' };
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS count FROM messages WHERE reference = ? AND sender = ? AND created_at > ?').bind(reference, sender, since).first();
+  if (Number(recent?.count || 0) >= MESSAGES_PER_DAY) return { error: 'Trop de messages envoyés aujourd’hui. Réessayez demain.' };
+  const body = unmasked ? text : maskContacts(text);
+  await env.DB.prepare('INSERT INTO messages (reference, sender, body, masked, created_at) VALUES (?, ?, ?, ?, ?)').bind(reference, sender, body, body !== text ? 1 : 0, new Date().toISOString()).run();
+  return { body, masked: body !== text };
+}
+function talkMail(to, name, from, body, link, button) {
+  return {
+    to: [to],
+    subject: `Nouveau message de ${from} sur Mon Nzonzi`,
+    html: `<h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;font-weight:normal">Bonjour ${escapeHtml(name)}, <strong>${escapeHtml(from)} vous a écrit.</strong></h1>
+<div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(body)}</div>
+<p style="margin:0 0 18px">${mailButton(button, link)}</p>
+<p style="margin:0;color:${mailColors.olive};font-size:13px">Pour répondre, utilisez le bouton ci-dessus : les réponses par email ne sont pas transmises.</p>`,
+    text: payText([`Bonjour ${name},`, '', `${from} vous a écrit sur Mon Nzonzi :`, '', body, '', `Pour répondre : ${link}`, '(Les réponses par email ne sont pas transmises.)', '', 'L’équipe Mon Nzonzi']),
+  };
+}
+// POST /api/messages (nzonzi connecté) : { reference, body }.
+export async function partnerMessagesApi(request, env, url, ctx, userId, email) {
+  if (!paymentsEnabledFor(env, email)) return payJson({ error: 'Messagerie indisponible.' }, 404);
+  const { input, error } = await payReadJson(request, url, 8000);
+  if (error) return error;
+  const { reference } = input;
+  if (typeof reference !== 'string' || !reference || reference.length > 100 || typeof input.body !== 'string') return payJson({ error: 'Requête invalide.' }, 400);
+  try {
+    const req = await env.DB.prepare("SELECT c.reference, c.family_name, c.family_email, p.published_json, p.profile_json FROM contact_requests c JOIN nzozi_profiles p ON p.slug = c.profile_slug WHERE c.reference = ? AND p.user_id = ? AND c.status != 'pending'").bind(reference, userId).first();
+    if (!req) return payJson({ error: 'Demande introuvable.' }, 404);
+    const saved = await talkSave(env, reference, 'nzonzi', input.body, await talkUnmasked(env, reference));
+    if (saved.error) return payJson(saved, saved.error.startsWith('Trop') ? 429 : 400);
+    const nz = payNz(req);
+    const link = url.origin + '/echange/' + await conversationToken(env, reference);
+    await payLater(ctx, sendMail(env, talkMail(req.family_email, req.family_name, nz.firstName, saved.body, link, 'Répondre à ' + nz.firstName)));
+    return payJson({ sent: true, masked: saved.masked });
+  } catch {
+    return payJson({ error: 'Envoi impossible pour le moment. Réessayez.' }, 503);
+  }
+}
+// /echange/<lien> : la conversation côté famille.
+export async function conversationRoute(request, env, token, ctx) {
+  const url = new URL(request.url);
+  if (!['GET', 'HEAD', 'POST'].includes(request.method)) return new Response(null, { status: 405, headers: payHeaders });
+  if (!env.DB) return payMessage('Service indisponible', 'Réessayez plus tard.', 503);
+  let row = null;
+  try {
+    if (/^[A-Za-z0-9_-]{20,60}$/.test(token)) row = await env.DB.prepare("SELECT t.reference, c.family_name, c.family_email, c.message, c.created_at, p.user_id, p.email AS login_email, p.published_json, p.profile_json, p.slug, (SELECT token FROM bookings b WHERE b.reference = t.reference AND b.status NOT IN ('cancelled', 'declined') ORDER BY b.created_at DESC LIMIT 1) AS booking_token FROM conversations t JOIN contact_requests c ON c.reference = t.reference JOIN nzozi_profiles p ON p.slug = c.profile_slug WHERE t.token = ?").bind(token).first();
+  } catch { row = null; }
+  if (!row) return payMessage('Lien introuvable', 'Ce lien n’existe pas ou n’est plus valable. Vérifiez l’email reçu ou écrivez-nous.', 404);
+  if (!paymentsEnabledFor(env, row.login_email)) return payMessage('Messagerie indisponible', 'La messagerie n’est pas disponible pour le moment.', 503);
+  const nz = payNz(row);
+  const unmasked = await talkUnmasked(env, row.reference);
+  const view = async (state = {}, status = 200) => {
+    const messages = [{ sender: 'family', body: row.message, created_at: row.created_at }, ...await talkMessages(env, row.reference)];
+    return payPage(layout('Échange avec ' + nz.firstName, `<main class="legal" id="main"><div class="shell">
+  <p class="kicker">Messagerie Mon Nzonzi</p>
+  <h1>Échange avec ${escapeHtml(nz.firstName)} ${escapeHtml(nz.lastName || '')}</h1>
+  ${row.booking_token ? `<p><a class="btn" href="/reservation/${escapeHtml(row.booking_token)}">Voir ma réservation</a></p>` : `<p class="note">Quand ${escapeHtml(nz.firstName)} aura accepté votre demande (date et prix), vous recevrez un email pour réserver.</p>`}
+  <section class="panel talk-page">
+    ${talkThread(messages, 'family', { nzonzi: nz.firstName })}
+    ${state.error ? `<div class="feedback error" role="alert">${escapeHtml(state.error)}</div>` : ''}${state.sent ? `<div class="feedback" role="status">Message envoyé. ${escapeHtml(nz.firstName)} reçoit une notification par email.${state.masked ? ' Des coordonnées ont été masquées.' : ''}</div>` : ''}
+    <form method="post" class="talk"><label class="field"><span>Votre message</span><textarea name="body" maxlength="${MESSAGE_MAX}" required></textarea></label>
+    ${unmasked ? '' : `<p class="note">Pour la sécurité de tous, les emails, numéros de téléphone et liens sont masqués jusqu’à votre réservation (paiement de l’acompte). Vous recevrez alors les coordonnées de ${escapeHtml(nz.firstName)}.</p>`}
+    <button class="btn" type="submit">Envoyer</button></form>
+  </section>
+</div></main>
+<style>${TALK_CSS}.talk-page{padding:clamp(18px,3vw,28px);margin-top:18px;display:grid;gap:14px}.talk-page .talk{border-top:0;margin-top:0;padding-top:0}</style>`), status);
+  };
+  if (request.method === 'HEAD') return payPage(null);
+  if (request.method === 'GET') return view({ sent: url.searchParams.get('envoye') === '1', masked: url.searchParams.get('masque') === '1' });
+  if (request.headers.get('Origin') !== url.origin) return view({ error: 'Origine de la demande non autorisée.' }, 403);
+  if (!(request.headers.get('Content-Type') || '').startsWith('application/x-www-form-urlencoded')) return new Response(null, { status: 415, headers: payHeaders });
+  const raw = await request.text();
+  if (raw.length > 12000) return new Response(null, { status: 413, headers: payHeaders });
+  try {
+    const saved = await talkSave(env, row.reference, 'family', new URLSearchParams(raw).get('body'), unmasked);
+    if (saved.error) return view({ error: saved.error }, saved.error.startsWith('Trop') ? 429 : 400);
+    await payLater(ctx, sendMail(env, talkMail(nz.contactEmail, nz.firstName, row.family_name, saved.body, url.origin + '/partenaire#demande-' + row.reference, 'Répondre à ' + row.family_name)));
+    return new Response(null, { status: 303, headers: { ...payHeaders, Location: url.pathname + '?envoye=1' + (saved.masked ? '&masque=1' : '') } });
+  } catch {
+    return view({ error: 'Envoi impossible pour le moment. Réessayez.' }, 503);
+  }
 }

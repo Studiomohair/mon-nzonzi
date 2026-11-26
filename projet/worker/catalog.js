@@ -958,6 +958,7 @@ async function sendContactRequest(request, env, profile, query) {
     const row = await env.DB.prepare('SELECT published_json, email FROM nzozi_profiles WHERE slug = ? AND published_json IS NOT NULL').bind(profile.slug).first();
     // Réservations payantes : coordonnées de la famille masquées jusqu'au paiement de l'acompte.
     const masked = Boolean(row) && bookingsActiveFor(env, row.email);
+    if (masked) values.message = maskContacts(values.message);
     const to = row ? String(JSON.parse(row.published_json).contactEmail || '') : '';
     if (!to) return show({ values, error: 'Ce nzonzi ne peut pas être contacté pour le moment.' }, 503);
     const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -971,6 +972,8 @@ async function sendContactRequest(request, env, profile, query) {
     // Double clic ou rechargement : la demande est déjà partie.
     if (!changes(inserted)) return done();
     const firstName = profile.name.split(' ')[0];
+    // Messagerie sur le site (réservations payantes) : lien personnel de la famille.
+    const talk = masked ? new URL(request.url).origin + '/echange/' + await conversationToken(env, values.reference) : '';
     const text = [
       `Bonjour ${firstName},`,
       '',
@@ -986,7 +989,7 @@ async function sendContactRequest(request, env, profile, query) {
       'Message :',
       values.message,
       '',
-      masked ? `Pour répondre, acceptez la demande (date et prix) ou refusez-la depuis votre espace : ${new URL(request.url).origin}/partenaire#demandes` : 'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
+      masked ? `Pour répondre à la famille, lui poser des questions, puis accepter la demande (date et prix) ou la refuser, rendez-vous dans votre espace : ${new URL(request.url).origin}/partenaire#demandes` : 'Pour répondre, utilisez simplement le bouton « Répondre » de votre messagerie.',
       masked ? 'L’email et le téléphone de la famille vous seront communiqués dès qu’elle aura payé l’acompte sur Mon Nzonzi.' : `Pour rassurer la famille, indiquez-lui que vous avez bien reçu sa demande depuis votre espace : ${new URL(request.url).origin}/partenaire#demandes`,
       '',
       'L’équipe Mon Nzonzi',
@@ -1003,8 +1006,8 @@ async function sendContactRequest(request, env, profile, query) {
 ${details}
 <p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Son message</p>
 <div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(values.message)}</div>
-${masked ? `<p style="margin:0 0 22px">${mailButton('Accepter ou refuser la demande', origin + '/partenaire#demandes')}</p>
-<p style="margin:0;color:${mailColors.olive};font-size:13px">Depuis votre espace, confirmez la date et le prix : la famille réserve en payant l’acompte sur Mon Nzonzi. Son email et son téléphone vous sont alors communiqués.</p>` : `<p style="margin:0 0 10px">${mailButton('Répondre à la famille', `mailto:${values.email}?subject=${encodeURIComponent('Votre demande sur Mon Nzonzi')}`)}</p>
+${masked ? `<p style="margin:0 0 22px">${mailButton('Répondre à la famille', origin + '/partenaire#demandes')}</p>
+<p style="margin:0;color:${mailColors.olive};font-size:13px">Depuis votre espace, échangez avec la famille par messages, puis confirmez la date et le prix : la famille réserve en payant l’acompte sur Mon Nzonzi. Son email et son téléphone vous sont alors communiqués.</p>` : `<p style="margin:0 0 10px">${mailButton('Répondre à la famille', `mailto:${values.email}?subject=${encodeURIComponent('Votre demande sur Mon Nzonzi')}`)}</p>
 <p style="margin:0 0 22px">${mailButton('Confirmer la réception à la famille', origin + '/partenaire#demandes', true)}</p>
 <p style="margin:0;color:${mailColors.olive};font-size:13px">Vous pouvez aussi simplement répondre à cet email : votre réponse arrive directement chez la famille. En confirmant la réception depuis votre espace, la famille est rassurée.</p>`}`;
     const sent = await sendMail(env, {
@@ -1026,7 +1029,7 @@ ${masked ? `<p style="margin:0 0 22px">${mailButton('Accepter ou refuser la dema
 ${mailDetails([['Nzonzi', profile.name], ['Ville', values.city], ['Lieu', values.venue], ['Adresse', values.address], ['Date', dateLabel]])}
 <p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Votre message</p>
 <div style="margin:0 0 22px;padding:16px 18px;border-left:4px solid ${mailColors.bordeaux};background:${mailColors.fond};border-radius:0 12px 12px 0;white-space:pre-wrap">${escapeHtml(values.message)}</div>
-<p style="margin:0">${mailButton('Revoir la fiche de ' + firstName, origin + '/nzonzi/' + profile.slug, true)}</p>`,
+<p style="margin:0">${talk ? mailButton('Écrire à ' + firstName, talk) + ' ' : ''}${mailButton('Revoir la fiche de ' + firstName, origin + '/nzonzi/' + profile.slug, true)}</p>`,
       text: [
         `Bonjour ${values.name},`,
         '',
@@ -1039,6 +1042,7 @@ ${mailDetails([['Nzonzi', profile.name], ['Ville', values.city], ['Lieu', values
         values.date ? `Date : ${formatDate.format(new Date(values.date))}` : '',
         `Message : ${values.message}`,
         '',
+        talk ? `Pour échanger avec ${firstName} sur Mon Nzonzi : ${talk}` : '',
         `Fiche de ${firstName} : ${new URL(request.url).origin}/nzonzi/${profile.slug}`,
         '',
         'L’équipe Mon Nzonzi',
@@ -1362,6 +1366,24 @@ export function stripeKeyMode(env) {
 export function bookingsActiveFor(env, loginEmail) {
   if (!stripeKeyMode(env)) return false;
   return env.PAYMENTS_ENABLED === 'true' || String(env.PAYMENTS_TEST_EMAILS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean).includes(String(loginEmail || '').toLowerCase());
+}
+// Coordonnées tapées dans un message (email, téléphone, lien, pseudo) : masquées avant la réservation.
+export const CONTACT_MASK = '[coordonnées masquées]';
+export function maskContacts(text) {
+  return String(text || '')
+    .replace(/\b(?:https?:\/\/|www\.)\S+|\b(?:wa\.me|t\.me|m\.me|instagram\.com|facebook\.com|fb\.com|snapchat\.com|tiktok\.com)\/\S*/gi, CONTACT_MASK)
+    .replace(/[\w.+-]+\s*(?:@|\(at\)|\[at\]|\barobase\b)\s*[\w-]+(?:\s*(?:\.|\(dot\)|\[dot\]|\bpoint\b)\s*[\w-]+)+/gi, CONTACT_MASK)
+    .replace(/(?:\+|\b00)\s?\d{2,3}[\s.-]?\(?0?\)?\s?\d(?:[\s.-]?\d{2}){4}\b|\b0\d(?:[\s.-]?\d{2}){4}\b|\b\d{9,}\b/g, CONTACT_MASK)
+    .replace(/(^|[\s(])@[\w.]{3,}/g, '$1' + CONTACT_MASK);
+}
+// Lien personnel de la famille pour échanger avec le nzonzi sur Mon Nzonzi (/echange/<lien>).
+export async function conversationToken(env, reference) {
+  const existing = await env.DB.prepare('SELECT token FROM conversations WHERE reference = ?').bind(reference).first();
+  if (existing) return existing.token;
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await env.DB.prepare('INSERT INTO conversations (reference, token, created_at) VALUES (?, ?, ?) ON CONFLICT(reference) DO NOTHING').bind(reference, token, new Date().toISOString()).run();
+  return (await env.DB.prepare('SELECT token FROM conversations WHERE reference = ?').bind(reference).first()).token;
 }
 export function paymentsPublic(env) {
   return env?.PAYMENTS_ENABLED === 'true' && Boolean(env?.STRIPE_SECRET_KEY);
@@ -1851,4 +1873,4 @@ loadProfile();
 }
 
 // Utilisés par worker/payments.js (inséré dans le même fichier au build).
-export { SITE_ORIGIN, catalogHeaders, catalogResponse, escapeHtml, formatDate, icon, layout, contactLink };
+export { SITE_ORIGIN, mailColors, catalogHeaders, catalogResponse, escapeHtml, formatDate, icon, layout, contactLink };

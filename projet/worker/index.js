@@ -1,5 +1,5 @@
 import { adminEmails, adminPage, catalog, partnerPage, reviewsAdminApi, sendMail, sendReviewInvitations, spaceGatePage } from './catalog.js';
-import { adminPaymentsApi, adminPaymentsSection, bookingRoute, bookingsCron, partnerBookings, partnerPaymentsApi, stripeWebhook } from './payments.js';
+import { adminPaymentsApi, adminPaymentsSection, bookingRoute, bookingsCron, conversationRoute, partnerBookings, partnerMessagesApi, partnerPaymentsApi, stripeWebhook } from './payments.js';
 
 function page(html,status=200,privatePage=false){return new Response(html,{status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':privatePage?'private, no-store':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Robots-Tag':privatePage?'noindex, nofollow':'all'}});}
 
@@ -59,10 +59,12 @@ async scheduled(event,env,ctx){await background(ctx,sendReviewInvitations(env));
 async fetch(request,env,ctx){
  const url=new URL(request.url);const readApi=url.pathname==='/api/demandes';const photo=url.pathname==='/api/photo';const api=url.pathname==='/api/profil';const partner=url.pathname==='/partenaire'||url.pathname==='/partenaire/';
  const adminView=url.pathname==='/partenaire/admin';const reviewsApiPath=url.pathname==='/api/admin/avis';const paymentsAdminPath=url.pathname==='/api/admin/paiements';const adminApiPath=url.pathname==='/api/admin/profils'||reviewsApiPath||paymentsAdminPath;
- const paymentsApi=url.pathname==='/api/reservations'||url.pathname==='/api/paiements/stripe';
+ const messagesApi=url.pathname==='/api/messages';
+ const paymentsApi=url.pathname==='/api/reservations'||url.pathname==='/api/paiements/stripe'||messagesApi;
  // Pages publiques des réservations (lien personnel de la famille) et webhook Stripe (signé) : hors de Cloudflare Access.
  if(url.pathname==='/stripe/webhook')return stripeWebhook(request,env,ctx);
  if(url.pathname.startsWith('/reservation/'))return bookingRoute(request,env,url.pathname.slice(13),ctx);
+ if(url.pathname.startsWith('/echange/'))return conversationRoute(request,env,url.pathname.slice(9),ctx);
  if(adminView||adminApiPath){
   const id=request.headers.get('oai-authenticated-user-id');const email=(request.headers.get('oai-authenticated-user-email')||'').trim().toLowerCase();
   if(!id||!email)return adminApiPath?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
@@ -78,6 +80,7 @@ async fetch(request,env,ctx){
   if(!id||!email)return (api||photo||readApi||paymentsApi)?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
   // NZOZI_OPEN_SIGNUP="true" : tout email vérifié par Cloudflare Access peut créer un profil (publié seulement après validation).
   if(env.NZOZI_OPEN_SIGNUP!=='true'&&!emailSet(env.NZOZI_ALLOWED_EMAILS).has(email))return (api||photo||readApi||paymentsApi)?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
+  if(messagesApi)return partnerMessagesApi(request,env,url,ctx,id,email);
   if(paymentsApi)return partnerPaymentsApi(request,env,url,ctx,id,email);
 
   if(photo){
