@@ -1367,8 +1367,8 @@ export function paymentRulesHtml() {
     <li><strong>Paiement en dehors du site</strong> : une famille et un nzonzi qui se sont trouvés sur Mon Nzonzi s’engagent à réserver et payer la prestation sur Mon Nzonzi. Un paiement fait en dehors du site n’est pas protégé.</li>
     <li><strong>Reçu</strong> : la famille et le nzonzi reçoivent un email de confirmation à chaque paiement.</li>
     <li><strong>Droit de rétractation</strong> : la famille peut se rétracter dans les ${r.withdrawalDays} jours qui suivent le paiement et être remboursée intégralement. Si la cérémonie a lieu avant la fin de ce délai, la famille demande, en payant, que la prestation soit réalisée avant cette date : une fois la cérémonie passée, la rétractation n’est plus possible.</li>
-    <li><strong>Annulation par le nzonzi</strong> : la famille est remboursée intégralement, quelle que soit la date.</li>
-    <li><strong>Annulation par la famille</strong> : plus de ${r.fullRefundDays} jours avant la cérémonie, remboursement intégral ; entre ${r.fullRefundDays} et ${r.halfRefundDays} jours avant, remboursement de 50 % des sommes versées ; moins de ${r.halfRefundDays} jours avant, aucun remboursement, sauf accord du nzonzi.</li>
+    <li><strong>Annulation ou absence du nzonzi</strong> : la famille est remboursée intégralement (acompte et solde), quelle que soit la date.</li>
+    <li><strong>Annulation par la famille</strong> : pendant le délai de rétractation, tout est remboursé. Ensuite, l’acompte reste acquis au nzonzi, qui a déjà engagé des frais. Le solde déjà payé est remboursé intégralement si l’annulation a lieu plus de ${r.fullRefundDays} jours avant la cérémonie, à 50 % entre ${r.fullRefundDays} et ${r.halfRefundDays} jours avant, et n’est pas remboursé à moins de ${r.halfRefundDays} jours, sauf accord du nzonzi.</li>
     <li><strong>Demander un remboursement</strong> : écrivez à ${contactLink()} en indiquant la référence du paiement. Le remboursement est fait sur la carte utilisée, en général sous 14 jours. Le délai d’arrivée sur le compte dépend ensuite de la banque.</li>
   </ul>`;
 }
