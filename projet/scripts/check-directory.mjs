@@ -73,6 +73,7 @@ for (const [path, title] of [['/mentions-legales', 'Mentions légales'], ['/conf
 }
 const mentions = await html('/mentions-legales');
 assert.match(mentions, /SIRET à compléter/);
+assert.match(mentions, /<dt>SIREN<\/dt><dd>882 137 425<\/dd>/);
 assert.match(mentions, /Cloudflare, Inc\./);
 assert.match(await html('/confidentialite'), /CNIL/);
 console.log('Annuaire sans profils fictifs, filtres, fiches, ressources et pages légales : OK.');

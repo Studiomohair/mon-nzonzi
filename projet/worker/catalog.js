@@ -1348,6 +1348,7 @@ const legalInfo = {
   publisher: '',          // Nom et prénom de l'entrepreneur, ou raison sociale
   legalForm: '',          // Ex. Entrepreneur individuel (micro-entreprise)
   address: '',            // Adresse du siège
+  siren: '882 137 425',   // Numéro SIREN (9 chiffres)
   siret: '',              // Numéro SIRET (14 chiffres)
   email: '',              // Email de contact public, ex. contact@mon-nzonzi.fr
   director: '',           // Directeur ou directrice de la publication
@@ -1374,6 +1375,7 @@ const legalPages = {
     <dt>Nom</dt><dd>${info('publisher', 'Nom ou raison sociale')}</dd>
     <dt>Statut</dt><dd>${info('legalForm', 'Statut juridique')}</dd>
     <dt>Adresse</dt><dd>${info('address', 'Adresse')}</dd>
+    <dt>SIREN</dt><dd>${info('siren', 'SIREN')}</dd>
     <dt>SIRET</dt><dd>${info('siret', 'SIRET')}</dd>
     <dt>Email</dt><dd>${contactLink()}</dd>
     <dt>Directeur de la publication</dt><dd>${info('director', 'Nom')}</dd>
