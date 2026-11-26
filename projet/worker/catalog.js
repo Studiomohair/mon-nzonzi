@@ -1345,14 +1345,14 @@ export async function reviewsAdminApi(request, env, url) {
 
 // Informations légales. Les valeurs vides s'affichent « à compléter ».
 const legalInfo = {
-  publisher: '',          // Nom et prénom de l'entrepreneur (suivis de « EI » à l'affichage)
+  publisher: 'Sanda MIGUEL', // Nom et prénom de l'entrepreneur (suivis de « EI » à l'affichage)
   tradeName: 'MiAgency',  // Nom commercial
   legalForm: 'Entrepreneur individuel (EI), micro-entreprise',
   address: '',            // Adresse du siège
   siren: '882 137 425',   // Numéro SIREN (9 chiffres)
   siret: '',              // Numéro SIRET (14 chiffres)
-  email: '',              // Email de contact public, ex. contact@mon-nzonzi.fr
-  director: '',           // Directeur ou directrice de la publication
+  email: 'contact@mon-nzonzi.fr', // Email de contact public, ex. contact@mon-nzonzi.fr
+  director: 'Sanda MIGUEL, pour MiAgency', // Directeur ou directrice de la publication
   updated: '26 novembre 2026',
 };
 function info(key, label) {
