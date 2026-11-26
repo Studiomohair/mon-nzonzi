@@ -1,4 +1,4 @@
-import { adminEmails, adminPage, catalog, partnerPage, sendMail, spaceGatePage } from './catalog.js';
+import { adminEmails, adminPage, catalog, partnerPage, reviewsAdminApi, sendMail, sendReviewInvitations, spaceGatePage } from './catalog.js';
 
 function page(html,status=200,privatePage=false){return new Response(html,{status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':privatePage?'private, no-store':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Robots-Tag':privatePage?'noindex, nofollow':'all'}});}
 
@@ -51,13 +51,17 @@ async function adminApi(request,env,url,ctx){
   await env.DB.prepare("UPDATE nzozi_profiles SET status = 'rejected', published_json = NULL, reviewed_at = ? WHERE user_id = ?").bind(now,userId).run();return json({status:'rejected'});
  }catch{return json({error:'Action impossible pour le moment. Réessayez.'},503);}
 }
-export default {async fetch(request,env,ctx){
+export default {
+// Tâche planifiée quotidienne (wrangler.toml, [triggers]) : invitations à donner un avis après la cérémonie.
+async scheduled(event,env,ctx){await background(ctx,sendReviewInvitations(env));},
+async fetch(request,env,ctx){
  const url=new URL(request.url);const readApi=url.pathname==='/api/demandes';const photo=url.pathname==='/api/photo';const api=url.pathname==='/api/profil';const partner=url.pathname==='/partenaire'||url.pathname==='/partenaire/';
- const adminView=url.pathname==='/partenaire/admin';const adminApiPath=url.pathname==='/api/admin/profils';
+ const adminView=url.pathname==='/partenaire/admin';const reviewsApiPath=url.pathname==='/api/admin/avis';const adminApiPath=url.pathname==='/api/admin/profils'||reviewsApiPath;
  if(adminView||adminApiPath){
   const id=request.headers.get('oai-authenticated-user-id');const email=(request.headers.get('oai-authenticated-user-email')||'').trim().toLowerCase();
   if(!id||!email)return adminApiPath?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
   if(!emailSet(env.NZOZI_ADMIN_EMAILS).has(email))return adminApiPath?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
+  if(reviewsApiPath)return reviewsAdminApi(request,env,url);
   if(adminApiPath)return adminApi(request,env,url,ctx);
   if(!['GET','HEAD'].includes(request.method))return new Response('Méthode non autorisée',{status:405});
   return page(request.method==='HEAD'?null:adminPage(),200,true);

@@ -15,9 +15,19 @@ async function publishedProfiles(env) {
   if (!env?.DB) return [];
   try {
     const { results } = await env.DB.prepare('SELECT slug, published_json FROM nzozi_profiles WHERE published_json IS NOT NULL AND slug IS NOT NULL ORDER BY reviewed_at DESC LIMIT 500').bind().all();
-    return results.map(row => publicProfile(row.slug, JSON.parse(row.published_json)));
+    const ratings = await reviewStats(env);
+    return results.map(row => ({ ...publicProfile(row.slug, JSON.parse(row.published_json)), rating: ratings.get(row.slug) || null }));
   } catch {
     return [];
+  }
+}
+// Note moyenne et nombre d'avis publiés, par fiche.
+async function reviewStats(env) {
+  try {
+    const { results } = await env.DB.prepare("SELECT profile_slug, AVG(rating) AS average, COUNT(*) AS count FROM reviews WHERE status = 'approved' GROUP BY profile_slug").bind().all();
+    return new Map(results.map(row => [row.profile_slug, { average: Number(row.average), count: Number(row.count) }]));
+  } catch {
+    return new Map();
   }
 }
 const splitList = (value, pattern) => String(value || '').split(pattern).map(item => item.trim()).filter(Boolean);
@@ -63,6 +73,7 @@ const glyphs = {
   chat: '<path d="M21 11.5a8 8 0 0 1-8.5 7.5H5l1.6-3A7.1 7.1 0 0 1 4 11.5a8 8 0 0 1 8.5-7.5 8 8 0 0 1 8.5 7.5Z"/><path d="M9 11.5h7"/>',
   search: '<circle cx="10.5" cy="10.5" r="5.8"/><path d="m15 15 4.3 4.3"/>',
   instagram: '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".9" fill="currentColor" stroke="none"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   lock: '<rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/>',
 };
 function icon(name) {
@@ -464,6 +475,40 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 .gate{max-width:640px;padding:64px 0 96px}
 .gate h1{font-size:clamp(36px,4.4vw,56px);margin-top:10px}
 .gate .hero-actions .link{color:var(--bordeaux)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.stars{position:relative;display:inline-block;color:var(--line);letter-spacing:2px;line-height:1;font-size:18px}
+.stars::before{content:"★★★★★";position:absolute;inset:0;width:calc(var(--rate) * 20%);overflow:hidden;color:var(--bordeaux);white-space:nowrap}
+.rating{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0 0 10px;font-size:15px;color:var(--muted)}
+.rating strong{color:var(--ink);font-weight:600}
+.rating a{color:var(--bordeaux);font-weight:500;text-underline-offset:3px}
+.card .rating{margin:-2px 0 10px;font-size:14px}.card .stars{font-size:15px}
+.profile-intro .rating{margin:4px 0 12px}
+.profile-main{display:grid;gap:20px;min-width:0}
+.reviews h2{margin-bottom:8px}
+.reviews-summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:14px 18px;border-radius:14px;background:var(--blanc);margin:14px 0 6px}
+.reviews-summary strong{font-family:var(--display);font-size:34px;font-weight:600;line-height:1}
+.reviews-summary .stars{font-size:22px}
+.review{padding:18px 0;border-top:1px solid var(--line)}
+.review:first-of-type{border-top:0}
+.review-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.review-head strong{font-weight:600}
+.review p{margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);font-weight:300}
+.review small{display:block;margin-top:8px;color:var(--muted);font-size:13px}
+.verified{display:inline-flex;align-items:center;gap:5px;color:var(--olive);font-size:13px;font-weight:500}
+.verified svg{width:15px;height:15px}
+.review-page{padding:32px 0 80px}
+.review-page .shell{max-width:720px}
+.review-page h1{font-size:clamp(34px,4.4vw,52px);margin:10px 0 8px}
+.review-page .lead{margin:10px 0 24px;max-width:none}
+.review-form{display:grid;gap:18px;padding:clamp(20px,3vw,32px)}
+.star-input{display:inline-flex;flex-direction:row-reverse;justify-content:flex-end;gap:2px}
+.star-input input{position:absolute;opacity:0;width:1px;height:1px}
+.star-input label{font-size:44px;line-height:1;color:var(--line);cursor:pointer;padding:0 2px;border-radius:8px}
+.star-input input:checked~label,.star-input label:hover,.star-input label:hover~label{color:var(--bordeaux)}
+.star-input input:focus-visible+label{outline:3px solid var(--olive);outline-offset:2px}
+.star-label{display:block;font-size:14px;font-weight:500;margin-bottom:4px}
+.review-form .check a{color:var(--bordeaux)}
+.review-form .btn{justify-self:start}
 @media(max-width:960px){
   .shell{width:calc(100% - 48px)}
   .filters{grid-template-columns:1fr 1fr}
@@ -561,7 +606,7 @@ function location(profile) {
 function card(profile, query) {
   return `<article class="card" data-profile="${profile.slug}">
     <div class="card-image">${profileMotion(profile)}</div>
-    <div class="card-content"><h3><a href="/nzonzi/${profile.slug}${query}">${escapeHtml(profile.name)}</a></h3>${location(profile)}
+    <div class="card-content"><h3><a href="/nzonzi/${profile.slug}${query}">${escapeHtml(profile.name)}</a></h3>${location(profile)}${profile.rating ? ratingLine(profile.rating) : ''}
     ${pills([profile.community, ...profile.languages].filter(Boolean))}
     <p>${escapeHtml(profile.summary)}</p>
     <div class="card-bottom"><div><strong class="price">${profilePrice(profile)}</strong><small>Prix total</small></div>
@@ -854,12 +899,15 @@ function profilePage(profile, query, state = {}, env = {}) {
     <section class="panel profile-head" aria-labelledby="profile-name">
       <div>${profileMotion(profile)}</div>
       <div class="profile-intro"><h1 id="profile-name">${escapeHtml(profile.name)}</h1>
-      ${location(profile)}${pills([profile.community, ...profile.languages].filter(Boolean))}<p class="lead">${escapeHtml(profile.summary)}</p></div>
+      ${location(profile)}${profile.rating ? ratingLine(profile.rating, '#avis') : ''}${pills([profile.community, ...profile.languages].filter(Boolean))}<p class="lead">${escapeHtml(profile.summary)}</p></div>
     </section>
     <div class="profile-layout">
+      <div class="profile-main">
       <section class="panel details"><h2>Présentation</h2><p>${escapeHtml(profile.bio)}</p>
         ${profileDetails(profile)}
       </section>
+      ${reviewsSection(profile, state.reviews || [])}
+      </div>
       ${contactSection(profile, url, state, env)}
     </div>
   </div></main>`, { seo: { path: '/nzonzi/' + profile.slug, description: `${profile.name}, nzonzi à ${profile.city} (${profile.region}). ${profile.summary}`.slice(0, 300) } });
@@ -876,7 +924,7 @@ const changes = result => Number(result?.meta?.changes ?? result?.changes ?? 0);
 
 async function sendContactRequest(request, env, profile, query) {
   if (!mailEnabled(env) || !env.DB) return new Response(null, { status: 405, headers: catalogHeaders });
-  const show = (state, status) => catalogResponse(profilePage(profile, query, state, env), status);
+  const show = async (state, status) => catalogResponse(profilePage(profile, query, { ...state, reviews: await publishedReviews(env, profile.slug) }, env), status);
   if (request.headers.get('Origin') !== new URL(request.url).origin) return show({ error: 'Origine de la demande non autorisée.' }, 403);
   if (!(request.headers.get('Content-Type') || '').startsWith('application/x-www-form-urlencoded')) return new Response(null, { status: 415, headers: catalogHeaders });
   const raw = await request.text();
@@ -998,6 +1046,303 @@ ${mailDetails([['Nzonzi', profile.name], ['Ville', values.city], ['Lieu', values
   return done();
 }
 
+// ——— Avis des familles ———
+// Seules les familles qui ont contacté un nzonzi via le formulaire du site sont invitées,
+// par un lien unique envoyé après la date de la cérémonie. Chaque avis est vérifié par
+// l'équipe avant publication (voir les CGU, section « Avis des familles »).
+const REVIEW_DAYS_AFTER_CEREMONY = 2;   // invitation 2 jours après la date de la cérémonie
+const REVIEW_DAYS_WITHOUT_DATE = 45;    // sans date : 45 jours après la demande
+const REVIEW_MAX_LATE_DAYS = 60;        // au-delà, plus d'invitation (souvenir trop lointain)
+const REVIEW_LINK_DAYS = 90;            // durée de validité du lien
+const REVIEW_BATCH = 40;                // invitations envoyées au plus par passage
+const REVIEW_COMMENT_MIN = 20;
+const REVIEW_COMMENT_MAX = 1500;
+export const REVIEW_REJECT_REASONS = [
+  'Propos injurieux, discriminatoires ou diffamatoires',
+  'Informations personnelles (téléphone, adresse, nom d’une autre personne)',
+  'Avis sans rapport avec la cérémonie ou avec ce nzonzi',
+  'Doute sérieux sur l’authenticité de l’avis ou conflit d’intérêts',
+  'Publicité ou lien vers un autre service',
+];
+const DAY_MS = 24 * 3600 * 1000;
+const formatRating = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const formatMonth = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+const ratingWords = ['', 'Décevant', 'Moyen', 'Bien', 'Très bien', 'Excellent'];
+
+function stars(value, label) {
+  return `<span class="stars" style="--rate:${Math.max(0, Math.min(5, Number(value) || 0)).toFixed(2)}" role="img" aria-label="${escapeHtml(label)}"><span aria-hidden="true">★★★★★</span></span>`;
+}
+function countLabel(count) {
+  return count + ' avis';
+}
+function ratingLine(rating, href = '') {
+  const text = formatRating.format(rating.average);
+  const count = countLabel(rating.count);
+  return `<p class="rating">${stars(rating.average, `Note moyenne : ${text} sur 5`)}<strong>${text}</strong>${href ? `<a href="${href}">${count}</a>` : `<span>${count}</span>`}</p>`;
+}
+function ceremonyMonth(date) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? formatMonth.format(new Date(date + 'T12:00:00Z')) : '';
+}
+async function publishedReviews(env, slug) {
+  if (!env?.DB) return [];
+  try {
+    const { results } = await env.DB.prepare("SELECT rating, comment, author_name, ceremony_date, submitted_at FROM reviews WHERE profile_slug = ? AND status = 'approved' ORDER BY submitted_at DESC LIMIT 100").bind(slug).all();
+    return results;
+  } catch {
+    return [];
+  }
+}
+function reviewsSection(profile, reviews) {
+  const firstName = escapeHtml(profile.name.split(' ')[0]);
+  const verified = `<span class="verified">${icon('check')}Avis vérifié</span>`;
+  const summary = profile.rating
+    ? `<div class="reviews-summary"><strong>${formatRating.format(profile.rating.average)}</strong>${stars(profile.rating.average, `Note moyenne : ${formatRating.format(profile.rating.average)} sur 5`)}<span class="muted">sur ${countLabel(profile.rating.count)}</span></div>`
+    : `<p class="muted">Pas encore d’avis pour ${firstName}.</p>`;
+  const list = reviews.map(review => {
+    const month = ceremonyMonth(review.ceremony_date);
+    return `<article class="review">
+          <div class="review-head">${stars(review.rating, `Note : ${review.rating} sur 5`)}<strong>${escapeHtml(review.author_name)}</strong>${verified}</div>
+          <p>${escapeHtml(review.comment)}</p>
+          <small>Avis publié le ${formatDate.format(new Date(review.submitted_at))}${month ? ` · cérémonie de ${month}` : ''}</small>
+        </article>`;
+  }).join('');
+  return `<section class="panel reviews" id="avis" aria-labelledby="reviews-title">
+        <h2 id="reviews-title">Avis des familles</h2>
+        ${summary}
+        ${list}
+        <p class="note">Seules les familles qui ont contacté ${firstName} via Mon Nzonzi peuvent laisser un avis, après leur cérémonie. Chaque avis est vérifié avant publication. <a class="link" href="/cgu#avis">Comment fonctionnent les avis</a></p>
+      </section>`;
+}
+
+function tokenOk(token) {
+  return /^[A-Za-z0-9_-]{32,64}$/.test(token);
+}
+function newToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+const reviewHeaders = { ...catalogHeaders, 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Content-Type': 'text/html; charset=utf-8' };
+function reviewResponse(html, status = 200) {
+  return new Response(html, { status, headers: reviewHeaders });
+}
+function reviewMessage(title, text, link = true) {
+  return layout('Votre avis', `<main class="review-page" id="main"><div class="shell">
+  <p class="kicker">Avis des familles</p>
+  <h1>${title}</h1>
+  <p class="lead">${text}</p>
+  ${link ? '<a class="btn secondary" href="/">Retour à Mon Nzonzi</a>' : ''}
+</div></main>`);
+}
+function reviewForm(row, name, token, state = {}) {
+  const values = state.values || {};
+  const firstName = escapeHtml(name.split(' ')[0]);
+  const month = ceremonyMonth(row.ceremony_date);
+  const starInputs = [5, 4, 3, 2, 1].map(n => `<input type="radio" id="note-${n}" name="note" value="${n}" required${String(values.rating) === String(n) ? ' checked' : ''}><label for="note-${n}" title="${ratingWords[n]}"><span aria-hidden="true">★</span><span class="sr-only">${n} sur 5 · ${ratingWords[n]}</span></label>`).join('');
+  return layout('Votre avis', `<main class="review-page" id="main"><div class="shell">
+  <p class="kicker">Avis des familles</p>
+  <h1>Comment s’est passée votre cérémonie avec <strong>${escapeHtml(name)}</strong> ?</h1>
+  <p class="lead">Votre avis aide d’autres familles à choisir leur nzonzi${month ? ` (cérémonie de ${month})` : ''}. Il sera publié sur la fiche de ${firstName} après vérification par l’équipe Mon Nzonzi.</p>
+  ${state.error ? `<div class="feedback error" role="alert">${escapeHtml(state.error)}</div>` : ''}
+  <form class="panel review-form" method="post" action="/avis/${escapeHtml(token)}">
+    <div><span class="star-label" id="note-title">Votre note</span>
+    <div class="star-input" role="radiogroup" aria-labelledby="note-title">${starInputs}</div></div>
+    <label class="field">Votre avis<textarea name="commentaire" minlength="${REVIEW_COMMENT_MIN}" maxlength="${REVIEW_COMMENT_MAX}" required placeholder="Comment ${firstName} a-t-il ou a-t-elle accompagné votre famille ? Préparation, prise de parole, respect des coutumes…">${escapeHtml(values.comment || '')}</textarea></label>
+    <label class="field"><span>Nom affiché <span class="optional">(par exemple « Famille M. » ou votre prénom)</span></span><input name="nom" maxlength="60" required value="${escapeHtml(values.author ?? suggestAuthor(row.family_name))}"></label>
+    <label class="check"><input type="checkbox" name="accord" value="oui" required${values.consent ? ' checked' : ''}><span>Je confirme que ma famille a fait appel à ${firstName} et j’accepte que mon avis, ma note et le nom affiché soient publiés sur sa fiche. <a href="/cgu#avis" target="_blank">Règles des avis</a></span></label>
+    <button class="btn" type="submit">Envoyer mon avis ${icon('arrow')}</button>
+    <p class="note">Si la cérémonie n’a pas eu lieu avec ${firstName}, ne remplissez pas ce formulaire.</p>
+  </form>
+</div></main>`);
+}
+// Proposition de nom affiché : « Famille » + initiale du dernier mot (« Famille Mbemba » → « Famille M. »).
+function suggestAuthor(familyName) {
+  const words = String(familyName || '').trim().split(/\s+/).filter(Boolean);
+  const last = words[words.length - 1] || '';
+  return last ? 'Famille ' + last.charAt(0).toUpperCase() + '.' : '';
+}
+async function reviewRoute(request, env, token) {
+  const isRead = request.method === 'GET' || request.method === 'HEAD';
+  if (!isRead && request.method !== 'POST') return new Response(null, { status: 405, headers: reviewHeaders });
+  const invalid = () => reviewResponse(reviewMessage('Ce lien n’est <strong>pas valide.</strong>', 'Vérifiez que vous avez copié le lien complet reçu par email. Pour toute question, écrivez-nous depuis le site.'), 404);
+  if (!tokenOk(token) || !env?.DB) return invalid();
+  let row;
+  try {
+    row = await env.DB.prepare('SELECT r.reference, r.profile_slug, r.family_name, r.ceremony_date, r.status, r.invited_at, p.published_json FROM reviews r LEFT JOIN nzozi_profiles p ON p.slug = r.profile_slug WHERE r.token_hash = ?').bind(await sha256(token)).first();
+  } catch {
+    row = null;
+  }
+  if (!row) return invalid();
+  if (row.status !== 'invited') return reviewResponse(reviewMessage('Merci, votre avis <strong>est bien arrivé.</strong>', 'Nous le vérifions avant de le publier. Un seul avis est possible par demande.'));
+  if (!row.published_json) return reviewResponse(reviewMessage('Ce nzonzi n’est <strong>plus présent</strong> sur Mon Nzonzi.', 'Il n’est donc plus possible de laisser un avis sur sa fiche. Merci d’avoir pensé à nous.'), 410);
+  if (Date.now() - new Date(row.invited_at) > REVIEW_LINK_DAYS * DAY_MS) return reviewResponse(reviewMessage('Ce lien <strong>a expiré.</strong>', `Les liens pour donner un avis restent valables ${REVIEW_LINK_DAYS} jours.`), 410);
+  const nzonzi = JSON.parse(row.published_json);
+  const name = [nzonzi.firstName, nzonzi.lastName].filter(Boolean).join(' ');
+  if (isRead) return reviewResponse(request.method === 'HEAD' ? null : reviewForm(row, name, token));
+
+  const url = new URL(request.url);
+  const show = (state, status) => reviewResponse(reviewForm(row, name, token, state), status);
+  if (request.headers.get('Origin') !== url.origin) return show({ error: 'Origine de la demande non autorisée.' }, 403);
+  if (!(request.headers.get('Content-Type') || '').startsWith('application/x-www-form-urlencoded')) return new Response(null, { status: 415, headers: reviewHeaders });
+  const raw = await request.text();
+  if (raw.length > 8000) return new Response(null, { status: 413, headers: reviewHeaders });
+  const fields = new URLSearchParams(raw);
+  const values = {
+    rating: Number(fields.get('note')),
+    comment: (fields.get('commentaire') || '').trim().replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').slice(0, REVIEW_COMMENT_MAX),
+    author: (fields.get('nom') || '').trim().replace(/\s+/g, ' ').slice(0, 60),
+    consent: fields.get('accord') === 'oui',
+  };
+  const error = message => show({ values, error: message }, 400);
+  if (!Number.isInteger(values.rating) || values.rating < 1 || values.rating > 5) return error('Choisissez une note de 1 à 5 étoiles.');
+  if (values.comment.length < REVIEW_COMMENT_MIN) return error(`Écrivez quelques mots de plus (au moins ${REVIEW_COMMENT_MIN} caractères).`);
+  if (!values.author) return error('Indiquez le nom à afficher avec votre avis.');
+  if (!values.consent) return error('Cochez la case pour confirmer et accepter la publication.');
+  const now = new Date().toISOString();
+  try {
+    const saved = await env.DB.prepare("UPDATE reviews SET status = 'pending', rating = ?, comment = ?, author_name = ?, submitted_at = ? WHERE reference = ? AND status = 'invited'")
+      .bind(values.rating, values.comment, values.author, now, row.reference).run();
+    if (changes(saved)) {
+      await sendMail(env, {
+        to: adminEmails(env),
+        subject: `Nouvel avis à valider : ${values.rating}/5 pour ${name}`,
+        text: `Bonjour,\n\n${values.author} a laissé un avis (${values.rating}/5) sur ${name} :\n\n${values.comment}\n\nPour le publier ou le refuser : ${url.origin}/partenaire/admin#avis\n\nMon Nzonzi`,
+      });
+    }
+  } catch {
+    return show({ values, error: 'Votre avis n’a pas pu être enregistré. Réessayez dans quelques minutes.' }, 503);
+  }
+  return new Response(null, { status: 303, headers: { ...reviewHeaders, Location: '/avis/' + token } });
+}
+
+// Date à partir de laquelle la famille est invitée à donner son avis.
+function reviewDueAt(request) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(request.ceremony_date || '')) return new Date(request.ceremony_date + 'T09:00:00Z').getTime() + REVIEW_DAYS_AFTER_CEREMONY * DAY_MS;
+  return new Date(request.created_at).getTime() + REVIEW_DAYS_WITHOUT_DATE * DAY_MS;
+}
+function invitationMail(origin, link, request, nzonzi) {
+  const firstName = nzonzi.firstName;
+  const fullName = [nzonzi.firstName, nzonzi.lastName].filter(Boolean).join(' ');
+  const month = ceremonyMonth(request.ceremony_date);
+  return {
+    to: [request.family_email],
+    subject: `Comment s’est passée votre cérémonie avec ${firstName} ?`,
+    html: `<p style="margin:0 0 6px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:${mailColors.olive}">Votre avis compte</p>
+<h1 style="margin:0 0 14px;font-size:26px;line-height:1.2;font-weight:normal">Bonjour ${escapeHtml(request.family_name)}, <strong>comment s’est passée votre cérémonie avec ${escapeHtml(firstName)} ?</strong></h1>
+<p style="margin:0 0 14px">Vous avez contacté ${escapeHtml(fullName)} via Mon Nzonzi${month ? ` pour votre cérémonie de ${escapeHtml(month)}` : ''}. En une minute, votre note et quelques mots aideront d’autres familles à trouver le bon nzonzi.</p>
+<p style="margin:0 0 22px">${mailButton('Donner mon avis', link)}</p>
+<p style="margin:0 0 8px;color:${mailColors.olive};font-size:13px">Votre avis sera vérifié par l’équipe avant d’être publié sur la fiche de ${escapeHtml(firstName)}. Ce lien est personnel et valable ${REVIEW_LINK_DAYS} jours.</p>
+<p style="margin:0;color:${mailColors.olive};font-size:13px">Si la cérémonie n’a pas encore eu lieu ou ne s’est pas faite avec ${escapeHtml(firstName)}, ignorez simplement cet email.</p>`,
+    text: [
+      `Bonjour ${request.family_name},`,
+      '',
+      `Vous avez contacté ${fullName} via Mon Nzonzi${month ? ` pour votre cérémonie de ${month}` : ''}. Comment s’est-elle passée ?`,
+      'En une minute, votre note et quelques mots aideront d’autres familles à trouver le bon nzonzi :',
+      link,
+      '',
+      `Votre avis sera vérifié par l’équipe avant d’être publié. Ce lien est personnel et valable ${REVIEW_LINK_DAYS} jours.`,
+      `Si la cérémonie n’a pas encore eu lieu ou ne s’est pas faite avec ${firstName}, ignorez simplement cet email.`,
+      '',
+      'L’équipe Mon Nzonzi',
+    ].join('\n'),
+  };
+}
+// Envoie les invitations arrivées à échéance (tâche planifiée quotidienne, ou bouton de l'admin).
+// Une seule invitation par demande, et une seule par famille et par nzonzi.
+export async function sendReviewInvitations(env, origin = SITE_ORIGIN, now = Date.now()) {
+  if (!env?.DB || !mailEnabled(env)) return { sent: 0, failed: 0 };
+  const { results } = await env.DB.prepare(`SELECT c.reference, c.profile_slug, c.family_name, c.family_email, c.ceremony_date, c.created_at, p.published_json
+    FROM contact_requests c JOIN nzozi_profiles p ON p.slug = c.profile_slug AND p.published_json IS NOT NULL
+    WHERE c.status = 'sent' AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.reference = c.reference OR (r.profile_slug = c.profile_slug AND r.family_email = lower(c.family_email)))
+    ORDER BY c.created_at LIMIT 500`).bind().all();
+  const seen = new Set();
+  let sent = 0, failed = 0;
+  for (const request of results) {
+    const due = reviewDueAt(request);
+    const pair = request.profile_slug + '|' + request.family_email.toLowerCase();
+    if (!(due <= now) || now - due > REVIEW_MAX_LATE_DAYS * DAY_MS || seen.has(pair)) continue;
+    if (sent + failed >= REVIEW_BATCH) break;
+    seen.add(pair);
+    const token = newToken();
+    const inserted = await env.DB.prepare("INSERT INTO reviews (reference, profile_slug, family_email, family_name, ceremony_date, token_hash, status, invited_at) VALUES (?, ?, ?, ?, ?, ?, 'invited', ?) ON CONFLICT(reference) DO NOTHING")
+      .bind(request.reference, request.profile_slug, request.family_email.toLowerCase(), request.family_name, request.ceremony_date || '', await sha256(token), new Date(now).toISOString()).run();
+    if (!changes(inserted)) continue;
+    const ok = await sendMail(env, invitationMail(origin, origin + '/avis/' + token, request, JSON.parse(request.published_json)));
+    if (ok) sent++;
+    else {
+      failed++;
+      // Échec d'envoi : nouvelle tentative au prochain passage.
+      await env.DB.prepare("DELETE FROM reviews WHERE reference = ? AND status = 'invited'").bind(request.reference).run();
+    }
+  }
+  return { sent, failed };
+}
+
+// Administration des avis (/api/admin/avis), réservée à NZOZI_ADMIN_EMAILS (contrôle dans index.js).
+function adminJson(data, status = 200) {
+  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
+}
+// Les réponses aux emails liés aux avis arrivent à l'équipe.
+function adminReplyTo(env) {
+  const [email] = adminEmails(env);
+  return email ? { email, name: 'Mon Nzonzi' } : undefined;
+}
+export async function reviewsAdminApi(request, env, url) {
+  if (!env.DB) return adminJson({ error: 'Base de données indisponible.' }, 503);
+  try {
+    if (request.method === 'GET') {
+      const { results } = await env.DB.prepare("SELECT reference, profile_slug, family_name, family_email, ceremony_date, status, rating, comment, author_name, reject_reason, invited_at, submitted_at, reviewed_at FROM reviews WHERE status != 'invited' ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, submitted_at DESC LIMIT 200").bind().all();
+      const invited = await env.DB.prepare("SELECT COUNT(*) AS count FROM reviews WHERE status = 'invited'").bind().first();
+      return adminJson({
+        reasons: REVIEW_REJECT_REASONS,
+        invited: Number(invited?.count || 0),
+        mail: mailEnabled(env),
+        reviews: results.map(r => ({ reference: r.reference, slug: r.profile_slug, family: r.family_name, email: r.family_email, ceremonyDate: r.ceremony_date, status: r.status, rating: r.rating, comment: r.comment, author: r.author_name, rejectReason: r.reject_reason, invitedAt: r.invited_at, submittedAt: r.submitted_at, reviewedAt: r.reviewed_at })),
+      });
+    }
+    if (request.method !== 'POST') return adminJson({ error: 'Méthode non autorisée.' }, 405);
+    if (request.headers.get('Origin') !== url.origin) return adminJson({ error: 'Origine non autorisée.' }, 403);
+    if (!(request.headers.get('Content-Type') || '').startsWith('application/json')) return adminJson({ error: 'Format non autorisé.' }, 415);
+    const body = await request.text();
+    if (body.length > 1000) return adminJson({ error: 'Requête trop volumineuse.' }, 413);
+    let input;
+    try { input = JSON.parse(body); } catch { return adminJson({ error: 'Requête invalide.' }, 400); }
+    const { reference, action, reason } = input || {};
+    if (action === 'invite') return adminJson(await sendReviewInvitations(env, url.origin));
+    if (typeof reference !== 'string' || !reference || reference.length > 100 || !['approve', 'reject'].includes(action)) return adminJson({ error: 'Requête invalide.' }, 400);
+    if (action === 'reject' && !(Number.isInteger(reason) && REVIEW_REJECT_REASONS[reason])) return adminJson({ error: 'Choisissez le motif du refus.' }, 400);
+    const row = await env.DB.prepare('SELECT r.status, r.family_email, r.family_name, r.author_name, r.rating, r.profile_slug, p.published_json FROM reviews r LEFT JOIN nzozi_profiles p ON p.slug = r.profile_slug WHERE r.reference = ?').bind(reference).first();
+    if (!row || row.status === 'invited') return adminJson({ error: 'Avis introuvable.' }, 404);
+    const now = new Date().toISOString();
+    const nzonzi = row.published_json ? JSON.parse(row.published_json) : null;
+    if (action === 'approve') {
+      if (row.status === 'approved') return adminJson({ status: 'approved' });
+      await env.DB.prepare("UPDATE reviews SET status = 'approved', reject_reason = '', reviewed_at = ? WHERE reference = ?").bind(now, reference).run();
+      if (nzonzi?.contactEmail) {
+        await sendMail(env, {
+          to: [nzonzi.contactEmail],
+          subject: 'Un nouvel avis est publié sur votre fiche',
+          replyTo: adminReplyTo(env),
+          text: `Bonjour ${nzonzi.firstName},\n\n${row.author_name} a laissé un avis (${row.rating}/5) après votre cérémonie. Il est maintenant visible sur votre fiche :\n${url.origin}/nzonzi/${row.profile_slug}#avis\n\nSi un avis vous semble contraire à nos règles, écrivez-nous en répondant à cet email.\n\nL’équipe Mon Nzonzi`,
+        });
+      }
+      return adminJson({ status: 'approved' });
+    }
+    const label = REVIEW_REJECT_REASONS[reason];
+    await env.DB.prepare("UPDATE reviews SET status = 'rejected', reject_reason = ?, reviewed_at = ? WHERE reference = ?").bind(label, now, reference).run();
+    // La famille est informée du refus et de son motif.
+    const name = nzonzi ? [nzonzi.firstName, nzonzi.lastName].filter(Boolean).join(' ') : 'ce nzonzi';
+    await sendMail(env, {
+      to: [row.family_email],
+      subject: row.status === 'approved' ? 'Votre avis a été retiré de Mon Nzonzi' : 'Votre avis n’a pas pu être publié',
+      replyTo: adminReplyTo(env),
+      text: `Bonjour ${row.family_name},\n\nMerci d’avoir pris le temps de donner votre avis sur ${name}. ${row.status === 'approved' ? 'Il a été retiré de sa fiche' : 'Nous ne pouvons pas le publier'} pour la raison suivante :\n${label}.\n\nNos règles sur les avis : ${url.origin}/cgu#avis\nPour toute question, répondez simplement à cet email.\n\nL’équipe Mon Nzonzi`,
+    });
+    return adminJson({ status: 'rejected' });
+  } catch {
+    return adminJson({ error: 'Action impossible pour le moment. Réessayez.' }, 503);
+  }
+}
+
 // Informations légales. Les valeurs vides s'affichent « à compléter ».
 const legalInfo = {
   publisher: '',          // Nom et prénom de l'entrepreneur, ou raison sociale
@@ -1006,7 +1351,7 @@ const legalInfo = {
   siret: '',              // Numéro SIRET (14 chiffres)
   email: '',              // Email de contact public, ex. contact@mon-nzonzi.fr
   director: '',           // Directeur ou directrice de la publication
-  updated: '25 novembre 2026',
+  updated: '26 novembre 2026',
 };
 function info(key, label) {
   return legalInfo[key] ? escapeHtml(legalInfo[key]) : `<mark class="todo">${label} à compléter</mark>`;
@@ -1049,12 +1394,14 @@ const legalPages = {
   <ul>
     <li><strong>Familles</strong> : nom, email, téléphone (facultatif), ville, lieu, adresse (pour une salle ou un domicile) et date de la cérémonie, message. Elles servent uniquement à transmettre votre demande au nzonzi choisi.</li>
     <li><strong>Nzonzi</strong> : email de connexion, prénom, nom, email et téléphone de contact, ville, région, langues, présentation, prestations, tarif, conditions, communauté (facultative) et photo (facultative). Elles servent à créer, vérifier et publier votre fiche.</li>
+    <li><strong>Avis</strong> : si une famille donne son avis, nous conservons sa note, son commentaire, le nom affiché qu’elle a choisi, son email et la date de la cérémonie. L’email sert uniquement à l’inviter à donner son avis et à la prévenir si l’avis n’est pas publié ; il n’est jamais affiché.</li>
     <li><strong>Données techniques</strong> : adresse IP et journaux techniques, utilisés pour la sécurité du site et contre les envois abusifs. L’adresse IP liée à une demande est conservée sous une forme non lisible (empreinte).</li>
   </ul>
   <h2>Pourquoi et sur quelle base</h2>
   <ul>
     <li>Transmettre la demande d’une famille à un nzonzi : mesures prises à votre demande (article 6.1.b du RGPD).</li>
     <li>Publier la fiche d’un nzonzi et gérer son espace : exécution des conditions d’utilisation (article 6.1.b).</li>
+    <li>Inviter une famille à donner son avis après sa cérémonie et publier les avis : intérêt légitime de Mon Nzonzi et des familles à disposer d’avis fiables (article 6.1.f). Vous pouvez ignorer l’invitation, et demander à tout moment le retrait de votre avis.</li>
     <li>Sécurité du site et lutte contre le spam : intérêt légitime de Mon Nzonzi (article 6.1.f).</li>
   </ul>
   <p>La <strong>communauté</strong> est une information facultative et déclarative. Elle n’est jamais déduite d’un nom ou d’une photo. Si un nzonzi la renseigne, elle est affichée sur sa fiche publique avec son accord explicite. Il peut la retirer à tout moment depuis son espace.</p>
@@ -1062,6 +1409,7 @@ const legalPages = {
   <ul>
     <li>Le nzonzi que vous contactez reçoit votre demande par email et vous répond directement.</li>
     <li>L’équipe Mon Nzonzi reçoit une copie des demandes et vérifie les fiches avant publication.</li>
+    <li>Un avis publié affiche la note, le commentaire, le nom choisi par la famille, la date de publication et le mois de la cérémonie. Le nzonzi concerné est prévenu de sa publication.</li>
     <li>Sur une fiche publique, seuls le nom, la ville, la région, les langues, la communauté (si renseignée), la présentation, les prestations et le prix sont visibles. L’email et le téléphone d’un nzonzi ne sont jamais affichés.</li>
     <li>Nos prestataires techniques : Cloudflare (hébergement, base de données, connexion à l’espace nzonzi), dont les serveurs peuvent être situés hors de l’Union européenne, avec les garanties prévues par le RGPD (clauses contractuelles types et Data Privacy Framework) ; Brevo (envoi des emails), société française.</li>
   </ul>
@@ -1069,6 +1417,7 @@ const legalPages = {
   <h2>Combien de temps</h2>
   <ul>
     <li>Demandes des familles : 12 mois après l’envoi, puis supprimées.</li>
+    <li>Avis : tant que la fiche du nzonzi est en ligne, ou jusqu’à ce que la famille demande leur retrait. Une invitation restée sans réponse expire au bout de 90 jours.</li>
     <li>Profils des nzonzi : tant que le compte est actif. Sur demande, le profil est retiré puis supprimé sous 30 jours.</li>
     <li>Journaux techniques : quelques jours, selon les règles de notre hébergeur.</li>
   </ul>
@@ -1097,11 +1446,19 @@ const legalPages = {
     <li>Il exerce son activité en toute indépendance et reste responsable de ses obligations (déclarations, assurances, impôts).</li>
     <li>Il peut modifier son profil à tout moment depuis son espace, ou demander sa suppression à ${contactLink()}.</li>
   </ul>
-  <h2>4. Responsabilité</h2>
+  <h2 id="avis">4. Avis des familles</h2>
+  <ul>
+    <li><strong>Qui peut donner un avis</strong> : seules les familles qui ont contacté un nzonzi avec le formulaire de sa fiche. Elles reçoivent par email un lien personnel, 2 jours après la date de la cérémonie (ou 45 jours après leur demande si aucune date n’a été indiquée). Ce lien est valable 90 jours et ne permet de donner qu’un seul avis. Les avis sont donc liés à une vraie demande, mais Mon Nzonzi ne peut pas vérifier que la cérémonie a bien eu lieu : la famille le confirme en cochant une case.</li>
+    <li><strong>Vérification</strong> : chaque avis est lu par l’équipe Mon Nzonzi avant publication, en général sous 7 jours. Le texte n’est jamais modifié. Aucun avis n’est rémunéré ni acheté, et un nzonzi ne peut ni supprimer ni commander un avis.</li>
+    <li><strong>Motifs de refus ou de retrait</strong> : propos injurieux, discriminatoires ou diffamatoires ; informations personnelles (téléphone, adresse, nom d’une autre personne) ; avis sans rapport avec la cérémonie ou avec ce nzonzi ; doute sérieux sur l’authenticité de l’avis ou conflit d’intérêts ; publicité. La famille est prévenue par email du refus et de son motif.</li>
+    <li><strong>Affichage</strong> : les avis sont classés du plus récent au plus ancien, avec leur date de publication et le mois de la cérémonie. La note moyenne d’un nzonzi est la moyenne de tous ses avis publiés.</li>
+    <li><strong>Signaler un avis</strong> : un nzonzi ou une famille peut signaler un avis à ${contactLink()}. Une famille peut aussi demander le retrait de son propre avis.</li>
+  </ul>
+  <h2>5. Responsabilité</h2>
   <p>Mon Nzonzi vérifie les profils avant publication mais ne peut pas garantir le déroulement d’une cérémonie. En cas de désaccord entre une famille et un nzonzi, la solution se trouve d’abord entre eux. Vous pouvez nous signaler tout problème à ${contactLink()}.</p>
-  <h2>5. Données personnelles</h2>
+  <h2>6. Données personnelles</h2>
   <p>Voir la <a href="/confidentialite">politique de confidentialité</a>.</p>
-  <h2>6. Modifications et droit applicable</h2>
+  <h2>7. Modifications et droit applicable</h2>
   <p>Ces conditions peuvent évoluer. La version en vigueur est celle publiée sur cette page. Elles sont soumises au droit français.</p>`),
 };
 
@@ -1135,6 +1492,7 @@ export async function catalog(request, env, regions) {
     if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
     return catalogResponse(request.method === 'HEAD' ? null : legal());
   }
+  if (pathname.startsWith('/avis/')) return reviewRoute(request, env, pathname.slice(6));
   if (pathname !== '/' && pathname !== '/index.html' && !pathname.startsWith('/nzonzi/')) return null;
   const profiles = await listedProfiles(env);
   const filters = filterState(url.searchParams, regions, profiles);
@@ -1148,7 +1506,7 @@ export async function catalog(request, env, regions) {
   if (request.method === 'POST') return sendContactRequest(request, env, profile, query);
   if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
   if (request.method === 'HEAD') return catalogResponse(null);
-  return catalogResponse(profilePage(profile, query, { sent: url.searchParams.get('envoye') === '1' }, env));
+  return catalogResponse(profilePage(profile, query, { sent: url.searchParams.get('envoye') === '1', reviews: await publishedReviews(env, profile.slug) }, env));
 }
 
 // Page d'administration : liste des profils et validation avant publication.
@@ -1163,13 +1521,18 @@ export function adminPage() {
   <section aria-labelledby="approved-title"><h2 id="approved-title">Publiés</h2><div id="list-approved" class="admin-list"></div></section>
   <section aria-labelledby="rejected-title"><h2 id="rejected-title">Refusés ou retirés</h2><div id="list-rejected" class="admin-list"></div></section>
   <section aria-labelledby="requests-title"><h2 id="requests-title">Demandes des familles</h2><p class="muted">Les 50 dernières demandes envoyées depuis les fiches. Vous en recevez aussi une copie par email.</p><div id="list-requests" class="admin-list"></div></section>
+  <section id="avis" aria-labelledby="reviews-title"><h2 id="reviews-title">Avis des familles</h2><p class="muted">Les familles qui ont contacté un nzonzi reçoivent un lien par email 2 jours après la date de leur cérémonie (45 jours après leur demande si elles n’ont pas donné de date). Un avis n’est publié qu’après votre accord. En cas de refus ou de retrait, la famille reçoit le motif par email.</p>
+  <div class="admin-actions"><button class="btn secondary" type="button" id="send-invitations">Envoyer maintenant les invitations prévues</button><span id="invited-count" class="muted"></span></div>
+  <div id="list-reviews" class="admin-list"></div></section>
 </div></main>
 <style>
 .admin h1{margin:14px 0 10px}.admin section{margin-top:34px}.admin h2{margin-bottom:14px}
 .admin-list{display:grid;gap:16px}.admin-card{padding:clamp(18px,3vw,28px)}
 .admin-card dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:14px 0}.admin-card dt{color:var(--muted);font-size:13px}.admin-card dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .admin-card.late{border-left:5px solid var(--bordeaux)}
-.admin-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.admin-state{font-size:13px;font-weight:650;color:var(--brown)}
+.admin-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
+.admin-actions select{width:auto;max-width:100%;min-height:50px}
+.admin-stars{color:var(--bordeaux);font-size:20px;letter-spacing:2px}.admin-state{font-size:13px;font-weight:650;color:var(--brown)}
 @media(max-width:640px){.admin-card dl{grid-template-columns:1fr}.admin-card dt{margin-top:6px}}
 </style>
 <script>
@@ -1218,6 +1581,57 @@ function renderRequests(requests) {
     return article;
   }) : [el('p', 'Aucune demande pour le moment.', 'muted')]));
 }
+const reviewStates = { pending: 'Avis à valider', approved: 'Publié sur la fiche', rejected: 'Refusé ou retiré' };
+let reasons = [];
+function renderReviews(data) {
+  reasons = data.reasons || [];
+  document.getElementById('invited-count').textContent = data.mail === false ? 'Emails désactivés (Brevo non configuré).' : (data.invited || 0) + ' invitation' + (data.invited > 1 ? 's' : '') + ' envoyée' + (data.invited > 1 ? 's' : '') + ', en attente de réponse.';
+  const list = document.getElementById('list-reviews');
+  const items = data.reviews || [];
+  list.replaceChildren(...(items.length ? items.map(reviewCard) : [el('p', 'Aucun avis reçu pour le moment.', 'muted')]));
+}
+function reviewCard(r) {
+  const article = el('article', '', 'panel admin-card');
+  if (r.status === 'pending') article.classList.add('late');
+  article.append(el('span', reviewStates[r.status] || r.status, 'admin-state'), el('h3', r.author + ' → ' + r.slug));
+  const starsEl = el('p', '★★★★★'.slice(0, r.rating) + '☆☆☆☆☆'.slice(0, 5 - r.rating) + '  ' + r.rating + '/5', 'admin-stars');
+  article.append(starsEl);
+  const dl = document.createElement('dl');
+  for (const [label, value] of [['Avis', r.comment], ['Famille', r.family + ' · ' + r.email], ['Cérémonie', r.ceremonyDate], ['Reçu le', r.submittedAt && new Date(r.submittedAt).toLocaleString('fr-FR')], ['Motif', r.rejectReason]]) if (value) dl.append(el('dt', label), el('dd', value));
+  article.append(dl);
+  const actions = el('div', '', 'admin-actions');
+  if (r.status !== 'approved') { const b = el('button', 'Publier l’avis', 'btn'); b.type = 'button'; b.onclick = () => reviewAct(r, 'approve', b); actions.append(b); }
+  if (r.status !== 'rejected') {
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Motif du refus');
+    select.append(new Option('Motif du refus…', ''), ...reasons.map((text, i) => new Option(text, String(i))));
+    const b = el('button', r.status === 'approved' ? 'Retirer l’avis' : 'Refuser', 'btn secondary'); b.type = 'button';
+    b.onclick = () => { if (select.value === '') { statusEl.textContent = 'Choisissez d’abord le motif du refus.'; select.focus(); return; } reviewAct(r, 'reject', b, Number(select.value)); };
+    actions.append(select, b);
+  }
+  if (r.status === 'approved') { const link = el('a', 'Voir sur la fiche', 'btn secondary'); link.href = '/nzonzi/' + r.slug + '#avis'; link.target = '_blank'; actions.append(link); }
+  article.append(actions);
+  return article;
+}
+async function reviewAct(r, action, button, reason) {
+  button.disabled = true; statusEl.textContent = 'Enregistrement…';
+  try {
+    const res = await fetch('/api/admin/avis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reference: r.reference, action, reason }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Action impossible.');
+    await load(action === 'approve' ? 'Avis publié.' : 'Avis refusé, la famille est prévenue.');
+  } catch (error) { statusEl.textContent = error.message; button.disabled = false; }
+}
+document.getElementById('send-invitations').onclick = async event => {
+  const button = event.currentTarget; button.disabled = true; statusEl.textContent = 'Envoi des invitations…';
+  try {
+    const res = await fetch('/api/admin/avis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'invite' }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Envoi impossible.');
+    await load(data.sent ? data.sent + ' invitation' + (data.sent > 1 ? 's' : '') + ' envoyée' + (data.sent > 1 ? 's.' : '.') : 'Aucune invitation à envoyer aujourd’hui.');
+  } catch (error) { statusEl.textContent = error.message; }
+  button.disabled = false;
+};
 function card(p) {
   const article = el('article', '', 'panel admin-card');
   article.append(el('span', labels[p.status](p), 'admin-state'), el('h3', [p.profile.firstName, p.profile.lastName].join(' ')));
@@ -1251,9 +1665,13 @@ async function load(message) {
     if (!r.ok) throw new Error(data.error || 'Chargement impossible.');
     render(data.profiles);
     renderRequests(data.requests || []);
+    let reviewsData = { reviews: [] };
+    try { const rr = await fetch('/api/admin/avis', { cache: 'no-store' }); if (rr.ok) reviewsData = await rr.json(); } catch {}
+    renderReviews(reviewsData);
     const pending = data.profiles.filter(p => p.status === 'pending').length;
     const late = (data.requests || []).filter(isLate).length;
-    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.' + (late ? ' ' + late + ' demande' + (late > 1 ? 's' : '') + ' sans confirmation de réception depuis plus de 48 h.' : '');
+    const pendingReviews = reviewsData.reviews.filter(r => r.status === 'pending').length;
+    statusEl.textContent = (message ? message + ' ' : '') + pending + ' profil' + (pending > 1 ? 's' : '') + ' à valider.' + (pendingReviews ? ' ' + pendingReviews + ' avis à valider.' : '') + (late ? ' ' + late + ' demande' + (late > 1 ? 's' : '') + ' sans confirmation de réception depuis plus de 48 h.' : '');
   } catch (error) { statusEl.textContent = error.message || 'Chargement impossible. Rechargez la page.'; }
 }
 load();
