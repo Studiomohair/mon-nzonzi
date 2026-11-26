@@ -1,3 +1,12 @@
+import { blogArticles } from './blog.js';
+
+// Adresse publique (liens canoniques, sitemap, données structurées).
+const SITE_ORIGIN = 'https://mon-nzonzi.fr';
+// Le site reste caché des moteurs de recherche jusqu'au lancement.
+// Passer à true UNIQUEMENT avec l'accord de la propriétaire : cela retire le noindex
+// des pages publiques et ouvre robots.txt (l'espace nzonzi reste toujours exclu).
+const SEARCH_INDEXING = false;
+
 // Seuls les profils validés par l'équipe (colonne published_json) sont publiés.
 async function listedProfiles(env) {
   return publishedProfiles(env);
@@ -39,6 +48,7 @@ const siteAssetRoutes = new Map([
   ['/assets/playfair-license.txt', ['playfair-license.txt', 'text/plain; charset=utf-8']],
   ['/assets/mon-nzonzi-clair.webp', ['mon-nzonzi-clair.webp', 'image/webp']],
   ['/assets/favicon.png', ['favicon.png', 'image/png']],
+  ['/assets/partage.png', ['partage.png', 'image/png']],
   ['/assets/outfit.woff2', ['outfit.woff2', 'font/woff2']],
   ['/assets/outfit-license.txt', ['outfit-license.txt', 'text/plain; charset=utf-8']],
 ]);
@@ -179,7 +189,7 @@ const motionCss = `
 
 const catalogHeaders = {
   'Cache-Control': 'private, no-store',
-  'X-Robots-Tag': 'noindex, nofollow',
+  'X-Robots-Tag': SEARCH_INDEXING ? 'all' : 'noindex, nofollow',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
 };
@@ -344,6 +354,41 @@ footer a{text-underline-offset:3px}
 .hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
 @media(max-width:640px){.legal dl{grid-template-columns:1fr}.legal dt{margin-top:8px}}
 
+.blog-teaser{padding:0 0 80px}
+.blog-more{margin-top:18px}
+.blog,.article{padding:32px 0 80px}
+.blog-head h1{font-size:clamp(38px,4.6vw,60px)}
+.blog-head .lead{margin-bottom:8px}
+.article-card .card-content>.kicker{margin-bottom:6px}
+.article-card h2{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.article-card h2 a,.article-card h3 a{text-decoration:none}
+.article-card h2 a:after,.article-card h3 a:after{content:'';position:absolute;inset:0}
+.article-card .card-content>p{margin:10px 0 18px}
+.article-art{aspect-ratio:1.9;display:grid;place-items:center;overflow:clip}
+.article-art svg{width:72%;height:auto;max-height:86%}
+.article>.shell>article,.article-head{max-width:760px}
+.article-head h1{font-size:clamp(38px,5vw,62px);margin-top:10px;text-wrap:balance}
+.article-head .lead{max-width:none;margin:18px 0 12px}
+.article-meta{color:var(--muted);font-size:14px}
+.takeaways{margin:28px 0 8px;padding:20px 24px;border-radius:20px;background:var(--blanc);border-left:5px solid var(--olive)}
+.takeaways h2{font-size:15px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--olive)}
+.takeaways ul{margin:10px 0 0;padding-left:20px}
+.takeaways li+li{margin-top:6px}
+.article-body h2,.faq>h2{font-size:clamp(26px,3vw,34px);font-weight:500;margin:40px 0 12px}
+.article-body p,.article-body li,.faq p{font-weight:300}
+.article-body p+p{margin-top:12px}
+.article-body ul,.article-body ol{padding-left:22px;margin:12px 0}
+.article-body li+li{margin-top:8px}
+.article-body a,.article-note a{color:var(--bordeaux);font-weight:500;text-underline-offset:3px}
+.article-body>p:first-child{margin-top:28px}
+.faq h3{font-size:19px;margin:24px 0 6px}
+.faq p{color:var(--muted)}
+.article-note{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:14px;font-weight:300}
+.article-cta{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px;margin:48px 0;background:var(--olive);color:var(--blanc);border-radius:28px;padding:clamp(24px,4vw,44px)}
+.article-cta h2{font-size:clamp(28px,3vw,40px)}
+.article-cta p{margin-top:8px;color:#ECEADF;font-weight:300;max-width:48ch}
+.related h2{font-size:clamp(28px,3vw,38px);margin-bottom:20px}
+
 .profile{padding:28px 0 72px}
 .back{display:inline-flex;align-items:center;gap:7px;color:var(--bordeaux);font-weight:600;font-size:15px;text-decoration:none;margin-bottom:20px}
 .back:hover{text-decoration:underline}
@@ -444,6 +489,8 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
   .filters .btn{width:100%}
   .profile-head>div:first-child{min-height:0;aspect-ratio:1.7}
   .profile{padding-top:16px}
+  .blog-teaser{padding-bottom:48px}
+  .article-cta .btn{width:100%}
   .join .btn{width:100%}
 }
 @media(max-width:480px){.venue-row{grid-template-columns:1fr}}
@@ -451,19 +498,43 @@ legend span{display:grid;place-items:center;width:34px;height:34px;border-radius
 `;
 
 // options.space : navigation de l'espace nzonzi.
+// options.seo : { path, description, fullTitle, type, jsonLd } pour les pages publiques.
+function jsonLdScript(data) {
+  return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
+}
+function seoTags(title, seo) {
+  if (!seo) return '';
+  const url = SITE_ORIGIN + seo.path;
+  const description = escapeHtml(seo.description);
+  return `<meta name="description" content="${description}">
+<link rel="canonical" href="${url}">
+<meta property="og:site_name" content="Mon Nzonzi">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:type" content="${seo.type || 'website'}">
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${description}">
+<meta property="og:url" content="${url}">
+<meta property="og:image" content="${SITE_ORIGIN}/assets/partage.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+${(seo.jsonLd || []).map(jsonLdScript).join('\n')}`;
+}
 function layout(title, main, options = {}) {
-  const { space = false } = options;
+  const { space = false, seo = null } = options;
+  const fullTitle = seo?.fullTitle || `${title} · Mon Nzonzi`;
   const links = space
     ? `<a href="/">Voir les nzonzi</a><a class="btn secondary" href="/cdn-cgi/access/logout">Se déconnecter</a>`
-    : `<a href="/#nzonzi">Les nzonzi</a><a href="/#comment">Comment ça marche</a><a class="btn secondary nav-partner" href="/partenaire">Vous êtes nzonzi ?</a>`;
+    : `<a href="/#nzonzi">Les nzonzi</a><a href="/#comment">Comment ça marche</a><a href="/blog">Blog</a><a class="btn secondary nav-partner" href="/partenaire">Vous êtes nzonzi ?</a>`;
   return `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex,nofollow">
+<meta name="robots" content="${SEARCH_INDEXING && seo ? 'index,follow' : 'noindex,nofollow'}">
 <meta name="theme-color" content="#382D20">
-<title>${escapeHtml(title)} · Mon Nzonzi</title>
+<title>${escapeHtml(fullTitle)}</title>
+${seoTags(fullTitle, seo)}
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 <link rel="apple-touch-icon" href="/assets/favicon.png">
 <link rel="preload" href="/assets/outfit.woff2" as="font" type="font/woff2" crossorigin>
@@ -476,7 +547,7 @@ function layout(title, main, options = {}) {
   <div class="nav-links">${links}</div>
 </nav></header>
 ${main}
-<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><span class="footer-links"><a class="social" href="https://www.instagram.com/monnzonzi/" target="_blank" rel="noopener" aria-label="Mon Nzonzi sur Instagram">${icon('instagram')}<span>@monnzonzi</span></a><a href="/partenaire">Espace nzonzi</a></span>
+<footer><div class="shell"><a class="brand" href="/" aria-label="Mon Nzonzi, accueil">${brandLogo(true)}</a><span>Une parole qui rassemble.</span><span class="footer-links"><a class="social" href="https://www.instagram.com/monnzonzi/" target="_blank" rel="noopener" aria-label="Mon Nzonzi sur Instagram">${icon('instagram')}<span>@monnzonzi</span></a><a href="/blog">Blog</a><a href="/partenaire">Espace nzonzi</a></span>
 <nav class="legal-links" aria-label="Informations légales"><a href="/mentions-legales">Mentions légales</a><a href="/confidentialite">Confidentialité</a><a href="/cgu">Conditions d’utilisation</a></nav></div></footer>
 </body></html>`;
 }
@@ -554,11 +625,100 @@ function directoryPage(filters, regions, profiles) {
     <li><h3>Contactez</h3><p>Échangez avec le nzonzi pour préparer votre cérémonie.</p></li>
   </ol>
 </div></section>
+${blogTeaser()}
 <section class="join" aria-labelledby="join-title"><div class="shell">
   <div><h2 id="join-title">Vous êtes <strong>nzonzi ?</strong></h2><p>Créez votre profil gratuitement. Il apparaît dans l’annuaire après notre validation.</p></div>
   <a class="btn light" href="/partenaire">Créer mon profil ${icon('arrow')}</a>
 </div></section>
-</main>`);
+</main>`, { seo: { path: '/', fullTitle: 'Mon Nzonzi · Trouver un nzonzi pour votre cérémonie de dot', description: 'Trouvez un nzonzi, porte-parole de votre famille pour la cérémonie de dot : profils vérifiés, langues, coutumes et prix affichés, près de chez vous.', jsonLd: [
+    { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Mon Nzonzi', url: SITE_ORIGIN + '/', inLanguage: 'fr-FR', publisher },
+  ] } });
+}
+
+// Blog pédagogique : /blog et /blog/<slug> (contenu dans worker/blog.js).
+const blogDate = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'Europe/Paris' });
+const blogArt = {
+  voices: '<circle cx="132" cy="150" r="34"/><circle cx="268" cy="150" r="34"/><path d="M84 240c0-40 22-62 48-62s48 22 48 62M220 240c0-40 22-62 48-62s48 22 48 62"/><path d="M150 52h100a20 20 0 0 1 20 20v18a20 20 0 0 1-20 20h-38l-12 14-12-14h-38a20 20 0 0 1-20-20V72a20 20 0 0 1 20-20Z"/><path d="M168 81h12m14 0h12m14 0h12"/>',
+  circle: '<circle cx="200" cy="130" r="88" stroke-dasharray="2 10"/><circle cx="200" cy="130" r="56"/><circle cx="200" cy="42" r="14"/><circle cx="200" cy="218" r="14"/><circle cx="112" cy="130" r="14"/><circle cx="288" cy="130" r="14"/><path d="M186 124h28M186 136h18"/>',
+  gift: '<rect x="128" y="96" width="144" height="112" rx="10"/><path d="M118 96h164v-26H118zM200 70v138"/><path d="M200 70c-10-26-46-34-50-12-3 16 26 16 50 12Zm0 0c10-26 46-34 50-12 3 16-26 16-50 12Z"/><path d="M80 210h240"/>',
+  steps: '<path d="M60 196h70v-40h70v-40h70V76h70" /><circle cx="95" cy="176" r="8"/><circle cx="165" cy="136" r="8"/><circle cx="235" cy="96" r="8"/><circle cx="305" cy="56" r="8"/><path d="M60 216h280"/>',
+  people: '<circle cx="200" cy="96" r="30"/><path d="M146 210c0-46 24-72 54-72s54 26 54 72"/><circle cx="110" cy="126" r="22"/><path d="M70 214c0-34 18-54 40-54 12 0 22 5 29 15"/><circle cx="290" cy="126" r="22"/><path d="M330 214c0-34-18-54-40-54-12 0-22 5-29 15"/>',
+};
+const blogAccents = { voices: 'var(--olive)', circle: 'var(--brun)', gift: 'var(--bordeaux)', steps: 'var(--olive)', people: 'var(--brun)' };
+function articleArt(article) {
+  return `<div class="article-art" style="background:${blogAccents[article.art] || 'var(--olive)'}"><svg viewBox="0 0 400 240" fill="none" stroke="var(--blanc)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${blogArt[article.art] || ''}</svg></div>`;
+}
+function articleCard(article, headingLevel = 'h3') {
+  return `<article class="card article-card">${articleArt(article)}
+    <div class="card-content"><span class="kicker">${escapeHtml(article.kicker)}</span><${headingLevel}><a href="/blog/${article.slug}">${escapeHtml(article.title)}</a></${headingLevel}>
+    <p>${escapeHtml(article.description)}</p>
+    <div class="card-bottom"><small>${article.minutes} min de lecture</small><span class="more" aria-hidden="true">Lire ${icon('arrow')}</span></div></div>
+  </article>`;
+}
+const publisher = { '@type': 'Organization', name: 'Mon Nzonzi', url: SITE_ORIGIN + '/', logo: SITE_ORIGIN + '/assets/favicon.png', sameAs: ['https://www.instagram.com/monnzonzi/'] };
+function breadcrumbs(items) {
+  return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items.map(([name, path], index) => ({ '@type': 'ListItem', position: index + 1, name, item: SITE_ORIGIN + path })) };
+}
+function blogIndexPage() {
+  const description = 'Nzonzi, kinzonzi, dot, étapes du mariage en RDC : nos articles pour comprendre les traditions du mariage congolais et bien préparer votre cérémonie.';
+  return layout('Blog', `<main class="blog" id="main"><div class="shell">
+  <div class="section-heading blog-head"><p class="kicker">Le blog</p><h1>Comprendre <strong>la dot</strong> et le kinzonzi</h1>
+  <p class="lead">Des explications simples sur les traditions du mariage congolais. Chaque famille a ses coutumes : ces articles donnent des repères, pas des règles.</p></div>
+  <div class="cards">${blogArticles.map(article => articleCard(article, 'h2')).join('')}</div>
+</div></main>`, { seo: { path: '/blog', description, fullTitle: 'Blog : comprendre la dot et le kinzonzi · Mon Nzonzi', jsonLd: [
+    { '@context': 'https://schema.org', '@type': 'Blog', name: 'Le blog Mon Nzonzi', url: SITE_ORIGIN + '/blog', inLanguage: 'fr-FR', description, publisher,
+      blogPost: blogArticles.map(article => ({ '@type': 'BlogPosting', headline: article.title, url: SITE_ORIGIN + '/blog/' + article.slug, datePublished: article.published })) },
+    breadcrumbs([['Accueil', '/'], ['Blog', '/blog']]),
+  ] } });
+}
+function articlePage(article) {
+  const path = '/blog/' + article.slug;
+  const updated = article.updated || article.published;
+  const related = article.related.map(slug => blogArticles.find(entry => entry.slug === slug)).filter(Boolean);
+  return layout(article.title, `<main class="article" id="main"><div class="shell">
+  <a class="back" href="/blog">${icon('back')} Tous les articles</a>
+  <article>
+    <header class="article-head"><p class="kicker">${escapeHtml(article.kicker)}</p><h1>${escapeHtml(article.title)}</h1>
+      <p class="lead">${escapeHtml(article.lead)}</p>
+      <p class="article-meta"><time datetime="${article.published}">${blogDate.format(new Date(article.published + 'T12:00:00Z'))}</time> · ${article.minutes} min de lecture · L’équipe Mon Nzonzi</p></header>
+    <aside class="takeaways" aria-label="À retenir"><h2>À retenir</h2><ul>${article.takeaways.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></aside>
+    <div class="article-body">${article.body}</div>
+    <section class="faq" aria-labelledby="faq-title"><h2 id="faq-title">Questions fréquentes</h2>
+      ${article.faq.map(item => `<h3>${escapeHtml(item.q)}</h3><p>${escapeHtml(item.a)}</p>`).join('')}</section>
+    <p class="article-note">Les coutumes varient d’une famille, d’une région et d’une communauté à l’autre. Cet article donne des repères généraux : en cas de doute, la parole des aînés de votre famille passe avant tout.</p>
+  </article>
+  <section class="article-cta"><div><h2>Besoin d’un <strong>nzonzi ?</strong></h2><p>Trouvez un porte-parole qui parle vos langues et connaît vos coutumes, près de chez vous.</p></div>
+    <a class="btn light" href="/#nzonzi">Voir les nzonzi ${icon('arrow')}</a></section>
+  <section class="related" aria-labelledby="related-title"><h2 id="related-title">À lire aussi</h2><div class="cards">${related.map(entry => articleCard(entry)).join('')}</div></section>
+</div></main>`, { seo: { path, description: article.description, fullTitle: article.seoTitle, type: 'article', jsonLd: [
+    { '@context': 'https://schema.org', '@type': 'Article', headline: article.title, description: article.description, inLanguage: 'fr-FR',
+      datePublished: article.published, dateModified: updated, mainEntityOfPage: SITE_ORIGIN + path, image: SITE_ORIGIN + '/assets/partage.png',
+      author: { '@type': 'Organization', name: 'Mon Nzonzi', url: SITE_ORIGIN + '/' }, publisher },
+    { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: article.faq.map(item => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })) },
+    breadcrumbs([['Accueil', '/'], ['Blog', '/blog'], [article.title, path]]),
+  ] } });
+}
+function blogTeaser() {
+  return `<section class="blog-teaser" aria-labelledby="blog-teaser-title"><div class="shell">
+  <div class="section-heading"><p class="kicker">Le blog</p><h2 id="blog-teaser-title">Comprendre <strong>la dot</strong></h2><p>Nzonzi, kinzonzi, liste de la dot, étapes du mariage : des repères simples pour bien préparer votre cérémonie.</p></div>
+  <div class="cards">${blogArticles.slice(0, 3).map(article => articleCard(article)).join('')}</div>
+  <p class="blog-more"><a class="link" href="/blog">Tous les articles</a></p>
+</div></section>`;
+}
+// Plan du site pour les moteurs de recherche (pages publiques seulement).
+function sitemap(profiles) {
+  const latest = blogArticles.map(article => article.updated || article.published).sort().at(-1);
+  const entries = [['/', null], ['/blog', latest], ...blogArticles.map(article => ['/blog/' + article.slug, article.updated || article.published]), ...profiles.map(profile => ['/nzonzi/' + profile.slug, null])];
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.map(([path, date]) => `  <url><loc>${SITE_ORIGIN}${escapeHtml(path)}</loc>${date ? `<lastmod>${date}</lastmod>` : ''}</url>`).join('\n')}
+</urlset>
+`;
+}
+function robotsTxt() {
+  return SEARCH_INDEXING
+    ? `User-agent: *\nDisallow: /partenaire\nDisallow: /api/\nDisallow: /cdn-cgi/\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`
+    : 'User-agent: *\nDisallow: /\n';
 }
 
 // Envoi d'emails par Brevo (API transactionnelle). Rien n'est envoyé tant que
@@ -702,7 +862,7 @@ function profilePage(profile, query, state = {}, env = {}) {
       </section>
       ${contactSection(profile, url, state, env)}
     </div>
-  </div></main>`);
+  </div></main>`, { seo: { path: '/nzonzi/' + profile.slug, description: `${profile.name}, nzonzi à ${profile.city} (${profile.region}). ${profile.summary}`.slice(0, 300) } });
 }
 
 // Demandes des familles : conservées 12 mois (voir la politique de confidentialité).
@@ -957,6 +1117,18 @@ export async function catalog(request, env, regions) {
     return new Response(request.method === 'HEAD' ? null : Uint8Array.from(atob(source), byte => byte.charCodeAt(0)), {
       headers: { ...catalogHeaders, 'Content-Type': type },
     });
+  }
+  if (pathname === '/robots.txt' || pathname === '/sitemap.xml') {
+    if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
+    const body = pathname === '/robots.txt' ? robotsTxt() : sitemap(await listedProfiles(env));
+    return new Response(request.method === 'HEAD' ? null : body, { headers: { ...catalogHeaders, 'Cache-Control': 'public, max-age=3600', 'Content-Type': pathname === '/robots.txt' ? 'text/plain; charset=utf-8' : 'application/xml; charset=utf-8' } });
+  }
+  if (pathname === '/blog' || pathname === '/blog/' || pathname.startsWith('/blog/')) {
+    if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
+    if (pathname === '/blog/') return new Response(null, { status: 301, headers: { ...catalogHeaders, Location: '/blog' } });
+    const article = pathname === '/blog' ? null : blogArticles.find(entry => pathname === '/blog/' + entry.slug);
+    if (pathname !== '/blog' && !article) return catalogResponse(request.method === 'HEAD' ? null : layout('Article introuvable', '<main class="article" id="main"><div class="shell"><h1>Article introuvable</h1><a class="back" href="/blog">Tous les articles</a></div></main>'), 404);
+    return catalogResponse(request.method === 'HEAD' ? null : article ? articlePage(article) : blogIndexPage());
   }
   const legal = legalPages[pathname];
   if (legal) {

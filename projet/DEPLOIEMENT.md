@@ -32,7 +32,7 @@ navigateur et ne le recrée qu'à partir d'un jeton Cloudflare Access vérifié
 ## Contrôles
 ```bash
 bash scripts/build.sh
-for s in directory profile photo partner access admin contact; do node scripts/check-$s.mjs; done
+for s in directory profile photo partner access admin contact blog; do node scripts/check-$s.mjs; done
 npx wrangler deploy --dry-run   # vérifie l'assemblage Cloudflare
 ```
 
@@ -86,3 +86,10 @@ Les demandes sont aussi visibles sur `/partenaire/admin` (50 dernières), conser
 Les informations de l'éditeur (nom, statut, adresse, SIRET, email, directeur de
 la publication) se remplissent dans l'objet `legalInfo` de `worker/catalog.js` ;
 tant qu'elles sont vides, la page affiche « … à compléter ».
+
+## Blog et référencement (SEO)
+
+- Articles : `/blog` et `/blog/<slug>`, contenu dans `worker/blog.js` (titre de page, description, FAQ, articles liés).
+- Chaque page publique a une description, une adresse canonique (`https://mon-nzonzi.fr/...`), des balises de partage (image `/assets/partage.png`) et des données structurées (Article, FAQ, fil d'Ariane).
+- `/sitemap.xml` liste l'accueil, le blog, les articles et les fiches validées.
+- **Le site reste caché des moteurs** (`noindex` + `robots.txt` qui bloque tout) tant que `SEARCH_INDEXING = false` en haut de `worker/catalog.js`. Au lancement, et seulement avec l'accord de la propriétaire : passer à `true`, fusionner, puis déclarer `https://mon-nzonzi.fr/sitemap.xml` dans Google Search Console. L'espace nzonzi, l'admin et les API restent toujours exclus.

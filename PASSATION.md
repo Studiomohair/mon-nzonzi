@@ -64,3 +64,7 @@ Prochain objectif fonctionnel ; maintien ou changement d’hébergement ; authen
 - Restes du prototype supprimés : profils fictifs (`SHOW_DEMO_PROFILES`), demandes de démonstration, bandeau « Prototype privé » et ancienne page `/presentation`. La table `demo_requests` reste en base mais n'est plus utilisée.
 - Pages légales : `/mentions-legales`, `/confidentialite`, `/cgu` (objet `legalInfo` dans `worker/catalog.js`).
 - Formulaire de contact famille → nzonzi sur chaque fiche validée, et alertes email, via Brevo. Inactifs tant que `BREVO_API_KEY` et `BREVO_SENDER_EMAIL` ne sont pas définis. Voir `projet/DEPLOIEMENT.md`.
+
+## Mise à jour du 26/11/2026 (blog)
+- Blog pédagogique `/blog` (5 articles : nzonzi, kinzonzi, dot, étapes du mariage en RDC, qui peut faire le kinzonzi), lien dans l'en-tête, le pied de page et un aperçu sur l'accueil.
+- SEO prêt (meta, canonique, Open Graph, JSON-LD, `/sitemap.xml`, `/robots.txt`) mais noindex conservé : interrupteur `SEARCH_INDEXING` dans `worker/catalog.js`. Voir `projet/DEPLOIEMENT.md`.

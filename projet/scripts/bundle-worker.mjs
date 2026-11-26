@@ -8,7 +8,12 @@ for (const file of (await readdir(assetDirectory)).sort()) {
   if (!/\.(webp|woff2|txt|png)$/.test(file)) continue;
   assets[file] = (await readFile(new URL(file, assetDirectory))).toString('base64');
 }
-const catalog = await readFile(fromRoot('worker/catalog.js'), 'utf8');
+const blogImport = "import { blogArticles } from './blog.js';";
+const catalogSource = await readFile(fromRoot('worker/catalog.js'), 'utf8');
+if (!catalogSource.includes(blogImport)) throw new Error('Worker assembly marker missing.');
+// Les articles du blog (données seules) sont placés avant le catalogue.
+const blog = await readFile(fromRoot('worker/blog.js'), 'utf8');
+const catalog = catalogSource.replace(blogImport, () => blog);
 const entry = await readFile(fromRoot('worker/index.js'), 'utf8');
 const catalogImport = "import { adminEmails, adminPage, catalog, partnerPage, sendMail, spaceGatePage } from './catalog.js';";
 const assetMarker = '/* SITE_ASSETS */ {}';
