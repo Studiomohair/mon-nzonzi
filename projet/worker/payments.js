@@ -387,7 +387,9 @@ export async function partnerPaymentsApi(request, env, url, ctx, userId, email) 
     await insert(booking, 'accepted');
     const sent = await sendMail(env, payFamilyMail(booking, 'accepted', url.origin));
     return payJson({ id: booking.id, status: 'accepted', emailed: sent, link: url.origin + '/reservation/' + booking.token });
-  } catch {
+  } catch (err) {
+    // Message Stripe visible dans les journaux du Worker (Cloudflare → mon-nzonzi → Journaux) ; jamais la clé.
+    console.error('Paiements nzonzi :', err?.message || err);
     return payJson({ error: 'Action impossible pour le moment. Réessayez.' }, 503);
   }
 }
