@@ -30,6 +30,7 @@ node scripts/check-admin.mjs
 node scripts/check-contact.mjs
 node scripts/check-blog.mjs
 node scripts/check-reviews.mjs
+node scripts/check-payments.mjs
 ```
 Les tests utilisent node:sqlite. Ne pas éditer seulement dist/ : il est régénéré au build. Aucun script npm start/dev n’existe dans la source. Le script de build supprime puis recrée dist/.
 

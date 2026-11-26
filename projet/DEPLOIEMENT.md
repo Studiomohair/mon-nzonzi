@@ -101,3 +101,25 @@ tant qu'elles sont vides, la page affiche « … à compléter ».
 - Validation sur `/partenaire/admin` (section « Avis des familles », API `/api/admin/avis`) : publier, refuser ou retirer avec un motif ; la famille reçoit le motif par email, le nzonzi est prévenu quand un avis est publié. Le bouton « Envoyer maintenant les invitations prévues » lance la tâche sans attendre.
 - La note moyenne et les avis publiés s'affichent sur la fiche et sur les cartes de l'annuaire. Règles publiées dans les CGU (`/cgu#avis`).
 - La migration `0006_reviews.sql` est appliquée automatiquement au déploiement. Sans Brevo, aucune invitation ne part.
+
+## Réservations et paiements (Stripe Connect)
+
+**Désactivé par défaut.** Sans `STRIPE_SECRET_KEY`, le site fonctionne exactement comme avant. Aucun vrai paiement tant que la propriétaire n'a pas donné son accord : une clé `sk_live_` est refusée sauf si `PAYMENTS_LIVE` vaut `true`.
+
+Parcours (code dans `worker/payments.js`, règles dans `PAYMENT_RULES` de `worker/catalog.js`) :
+1. La famille envoie sa demande depuis la fiche (formulaire existant).
+2. Dans « Mes demandes », le nzonzi **accepte** (date confirmée, prix de sa fiche + frais éventuels, message) ou **refuse**. La famille reçoit un lien personnel `/reservation/<lien>`.
+3. La famille paie un **acompte de 30 %** (Stripe Checkout, carte). Il est versé au nzonzi 14 jours plus tard (délai de rétractation), ou le jour de la cérémonie si elle a lieu avant.
+4. Le **solde** se paie à partir de 80 jours avant la cérémonie (email automatique). Il reste sur le compte Stripe de Mon Nzonzi (« separate charges and transfers »).
+5. Le lendemain de la cérémonie, la famille confirme (solde versé au nzonzi) ou signale un problème (solde bloqué, décision de l'équipe dans `/partenaire/admin#paiements` : verser ou rembourser, totalement ou en partie). Sans réponse 5 jours après l'email : versement automatique.
+6. Commission : 15 % de chaque paiement reste à Mon Nzonzi ; les frais Stripe sont pris dessus.
+
+Limite Stripe : pas de séquestre légal, et les fonds ne doivent pas rester bloqués plus de 90 jours (France). D'où le solde à J-80 et une alerte email à l'équipe pour toute réservation bloquée depuis 75 jours.
+
+Mise en route (mode test d'abord) :
+1. Stripe → mode test → Connect → plateforme / place de marché, comptes **Express**, pays France. Compléter le profil de la plateforme.
+2. Secrets du Worker (type **Secret**) : `STRIPE_SECRET_KEY` (`sk_test_…`), `PAYMENTS_TEST_EMAILS` (emails de connexion des nzonzi testeurs, séparés par des virgules).
+3. Stripe → Développeurs → Webhooks → endpoint `https://mon-nzonzi.fr/stripe/webhook`, événements de **votre compte** : `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded`. Copier le secret de signature dans `STRIPE_WEBHOOK_SECRET`.
+4. Pour tous les nzonzi : `PAYMENTS_ENABLED` = `true` (affiche aussi la section paiement des CGU). Pour les vrais paiements : clé `sk_live_…`, nouveau webhook en mode live, et `PAYMENTS_LIVE` = `true`, uniquement avec l'accord de la propriétaire.
+
+`/stripe/webhook` et `/reservation/*` ne doivent pas être protégés par Cloudflare Access. La migration `0007_bookings_payments.sql` est appliquée automatiquement au déploiement. Les versements et emails sont faits par la tâche quotidienne existante (8 h UTC). Contrôle : `node scripts/check-payments.mjs`.

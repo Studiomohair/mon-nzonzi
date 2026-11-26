@@ -18,5 +18,13 @@ const entry = await readFile(fromRoot('worker/index.js'), 'utf8');
 const catalogImport = "import { adminEmails, adminPage, catalog, partnerPage, reviewsAdminApi, sendMail, sendReviewInvitations, spaceGatePage } from './catalog.js';";
 const assetMarker = '/* SITE_ASSETS */ {}';
 if (!entry.includes(catalogImport) || !catalog.includes(assetMarker)) throw new Error('Worker assembly marker missing.');
-const bundledCatalog = catalog.replace(/^export /gm, '').replace(assetMarker, () => JSON.stringify(assets));
-await writeFile(fromRoot('dist/server/index.js'), entry.replace(catalogImport, () => bundledCatalog));
+// Les modules partagent une seule portée : on retire import/export entre eux.
+const unexport = source => source.replace(/^export \{[^}]*\};?\n/gm, '').replace(/^export /gm, '');
+const bundledCatalog = unexport(catalog).replace(assetMarker, () => JSON.stringify(assets));
+// Paiements Stripe (worker/payments.js) : placés après le catalogue, dont ils utilisent les fonctions.
+const paymentsImport = /^import \{[^}]*\} from '\.\/payments\.js';\n/m;
+const paymentsSource = await readFile(fromRoot('worker/payments.js'), 'utf8');
+const catalogFromPayments = /^import \{[^}]*\} from '\.\/catalog\.js';\n/m;
+if (!paymentsImport.test(entry) || !catalogFromPayments.test(paymentsSource)) throw new Error('Worker assembly marker missing.');
+const bundledPayments = unexport(paymentsSource.replace(catalogFromPayments, ''));
+await writeFile(fromRoot('dist/server/index.js'), entry.replace(catalogImport, () => bundledCatalog).replace(paymentsImport, () => bundledPayments));
