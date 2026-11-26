@@ -1343,6 +1343,36 @@ export async function reviewsAdminApi(request, env, url) {
   }
 }
 
+// ——— Paiements en ligne (Stripe Connect, voir worker/payments.js) ———
+// La section des CGU n'apparaît qu'une fois les paiements ouverts à tous (PAYMENTS_ENABLED="true").
+// Pendant les tests (PAYMENTS_TEST_EMAILS), les règles sont affichées sur la page de paiement.
+export function paymentsPublic(env) {
+  return env?.PAYMENTS_ENABLED === 'true' && Boolean(env?.STRIPE_SECRET_KEY);
+}
+export const PAYMENT_RULES = {
+  depositPercent: 30,     // acompte payé à la réservation, versé au nzonzi après le délai de rétractation
+  balanceDays: 80,        // solde payable à partir de 80 jours avant la cérémonie (Stripe : fonds conservés 90 jours au plus)
+  autoReleaseDays: 5,     // sans réponse de la famille après la cérémonie : versement automatique du solde
+  fullRefundDays: 30,     // annulation par la famille plus de 30 jours avant : remboursement intégral
+  halfRefundDays: 8,      // entre 30 et 8 jours avant : 50 % ; moins de 8 jours : rien (sauf accord du nzonzi)
+  withdrawalDays: 14,     // droit de rétractation après le paiement
+};
+export function paymentRulesHtml() {
+  const r = PAYMENT_RULES;
+  return `<ul>
+    <li><strong>Réserver</strong> : la famille envoie sa demande depuis la fiche du nzonzi. Le nzonzi l’accepte en confirmant la date et le prix (prix de sa fiche, plus d’éventuels frais de déplacement). Tous les paiements se font sur Mon Nzonzi, par carte bancaire, sur la page sécurisée de notre prestataire Stripe. Mon Nzonzi ne voit jamais les numéros de carte.</li>
+    <li><strong>Acompte</strong> : la famille réserve en payant un acompte de ${r.depositPercent} % du prix. Il est versé au nzonzi ${r.withdrawalDays} jours après le paiement (ou le jour de la cérémonie si elle a lieu avant), pour couvrir ses frais de préparation et de déplacement.</li>
+    <li><strong>Solde et protection de la famille</strong> : le solde se paie à partir de ${r.balanceDays} jours avant la cérémonie. Il reste bloqué chez Stripe jusqu’après la cérémonie. Le lendemain, la famille confirme que tout s’est bien passé et le solde est versé au nzonzi. Si le nzonzi ne s’est pas présenté ou en cas de problème, la famille le signale : le solde reste bloqué et l’équipe Mon Nzonzi examine la situation avec les deux parties avant de décider d’un remboursement total ou partiel, ou du versement. Sans réponse de la famille dans les ${r.autoReleaseDays} jours, le solde est versé au nzonzi.</li>
+    <li><strong>Où va l’argent</strong> : les paiements sont encaissés par Mon Nzonzi pour le compte du nzonzi, via Stripe. 85 % sont versés au nzonzi, 15 % correspondent à la commission Mon Nzonzi, déjà incluse dans le prix. La famille ne paie aucun frais supplémentaire.</li>
+    <li><strong>Paiement en dehors du site</strong> : une famille et un nzonzi qui se sont trouvés sur Mon Nzonzi s’engagent à réserver et payer la prestation sur Mon Nzonzi. Un paiement fait en dehors du site n’est pas protégé.</li>
+    <li><strong>Reçu</strong> : la famille et le nzonzi reçoivent un email de confirmation à chaque paiement.</li>
+    <li><strong>Droit de rétractation</strong> : la famille peut se rétracter dans les ${r.withdrawalDays} jours qui suivent le paiement et être remboursée intégralement. Si la cérémonie a lieu avant la fin de ce délai, la famille demande, en payant, que la prestation soit réalisée avant cette date : une fois la cérémonie passée, la rétractation n’est plus possible.</li>
+    <li><strong>Annulation par le nzonzi</strong> : la famille est remboursée intégralement, quelle que soit la date.</li>
+    <li><strong>Annulation par la famille</strong> : plus de ${r.fullRefundDays} jours avant la cérémonie, remboursement intégral ; entre ${r.fullRefundDays} et ${r.halfRefundDays} jours avant, remboursement de 50 % des sommes versées ; moins de ${r.halfRefundDays} jours avant, aucun remboursement, sauf accord du nzonzi.</li>
+    <li><strong>Demander un remboursement</strong> : écrivez à ${contactLink()} en indiquant la référence du paiement. Le remboursement est fait sur la carte utilisée, en général sous 14 jours. Le délai d’arrivée sur le compte dépend ensuite de la banque.</li>
+  </ul>`;
+}
+
 // Informations légales. Les valeurs vides s'affichent « à compléter ».
 const legalInfo = {
   publisher: '',          // Nom et prénom de l'entrepreneur, ou raison sociale
@@ -1427,14 +1457,14 @@ const legalPages = {
   <p>Vous pouvez demander l’accès à vos données, leur correction, leur suppression, leur portabilité, ou vous opposer à leur utilisation, en écrivant à ${contactLink()}. Nous répondons sous un mois.</p>
   <p>Si vous estimez que vos droits ne sont pas respectés, vous pouvez saisir la CNIL : <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">cnil.fr/fr/plaintes</a>.</p>`),
 
-  '/cgu': () => legalPage('Conditions d’utilisation', `
+  '/cgu': env => legalPage('Conditions d’utilisation', `
   <h2>1. Le service</h2>
   <p>Mon Nzonzi est un annuaire qui aide les familles à trouver un nzonzi (porte-parole ou médiateur) pour préparer une cérémonie de dot, dans le respect des coutumes de chacun. Mon Nzonzi met en relation les familles et les nzonzi. Il n’organise pas la cérémonie et n’est pas partie à l’accord conclu entre une famille et un nzonzi.</p>
   <h2>2. Pour les familles</h2>
   <ul>
     <li>La consultation de l’annuaire et l’envoi d’une demande sont gratuits et sans engagement.</li>
     <li>Le prix affiché sur une fiche est un prix total indicatif, commission Mon Nzonzi incluse. Les détails (durée, déplacements, déroulé) se décident directement avec le nzonzi.</li>
-    <li>Mon Nzonzi n’encaisse aucun paiement à ce jour. ${'<mark class="todo">Modalités de paiement et de commission à compléter</mark>'}</li>
+    <li>${paymentsPublic(env) ? 'Le paiement en ligne est décrit dans la section « Paiement, annulation et remboursement » ci-dessous.' : 'Mon Nzonzi n’encaisse aucun paiement à ce jour. Les modalités de paiement en ligne seront précisées ici avant leur ouverture.'}</li>
     <li>Merci de rester courtois et d’utiliser le formulaire uniquement pour une demande réelle.</li>
   </ul>
   <h2>3. Pour les nzonzi</h2>
@@ -1454,6 +1484,7 @@ const legalPages = {
     <li><strong>Affichage</strong> : les avis sont classés du plus récent au plus ancien, avec leur date de publication et le mois de la cérémonie. La note moyenne d’un nzonzi est la moyenne de tous ses avis publiés.</li>
     <li><strong>Signaler un avis</strong> : un nzonzi ou une famille peut signaler un avis à ${contactLink()}. Une famille peut aussi demander le retrait de son propre avis.</li>
   </ul>
+  ${paymentsPublic(env) ? `<h2 id="paiement">Paiement, annulation et remboursement</h2>${paymentRulesHtml()}` : ''}
   <h2>5. Responsabilité</h2>
   <p>Mon Nzonzi vérifie les profils avant publication mais ne peut pas garantir le déroulement d’une cérémonie. En cas de désaccord entre une famille et un nzonzi, la solution se trouve d’abord entre eux. Vous pouvez nous signaler tout problème à ${contactLink()}.</p>
   <h2>6. Données personnelles</h2>
@@ -1490,7 +1521,7 @@ export async function catalog(request, env, regions) {
   const legal = legalPages[pathname];
   if (legal) {
     if (!isRead) return new Response(null, { status: 405, headers: catalogHeaders });
-    return catalogResponse(request.method === 'HEAD' ? null : legal());
+    return catalogResponse(request.method === 'HEAD' ? null : legal(env));
   }
   if (pathname.startsWith('/avis/')) return reviewRoute(request, env, pathname.slice(6));
   if (pathname !== '/' && pathname !== '/index.html' && !pathname.startsWith('/nzonzi/')) return null;
@@ -1511,7 +1542,7 @@ export async function catalog(request, env, regions) {
 
 // Page d'administration : liste des profils et validation avant publication.
 // Le contenu est inséré avec textContent côté navigateur (aucun HTML venant des profils).
-export function adminPage() {
+export function adminPage(extra = '') {
   return layout('Validation des profils', `<main class="profile admin" id="main"><div class="shell">
   <p class="kicker">Administration</p>
   <h1>Validation des profils nzonzi</h1>
@@ -1524,6 +1555,7 @@ export function adminPage() {
   <section id="avis" aria-labelledby="reviews-title"><h2 id="reviews-title">Avis des familles</h2><p class="muted">Les familles qui ont contacté un nzonzi reçoivent un lien par email 2 jours après la date de leur cérémonie (45 jours après leur demande si elles n’ont pas donné de date). Un avis n’est publié qu’après votre accord. En cas de refus ou de retrait, la famille reçoit le motif par email.</p>
   <div class="admin-actions"><button class="btn secondary" type="button" id="send-invitations">Envoyer maintenant les invitations prévues</button><span id="invited-count" class="muted"></span></div>
   <div id="list-reviews" class="admin-list"></div></section>
+  ${extra}
 </div></main>
 <style>
 .admin h1{margin:14px 0 10px}.admin section{margin-top:34px}.admin h2{margin-bottom:14px}
@@ -1704,7 +1736,7 @@ function partnerRequests(requests) {
       <p class="location">${icon('pin')}Cérémonie : ${escapeHtml(place)}${escapeHtml(when)}</p>
       ${r.ceremony_address ? `<p class="note request-address">Adresse : ${escapeHtml(r.ceremony_address)}</p>` : ''}
       <p class="request-message">${escapeHtml(r.message)}</p>
-      <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p>${read}</article>`;
+      <p class="request-contact"><a class="link" href="mailto:${email}">${email}</a>${phone}</p>${read}${r.extra || ''}</article>`;
   }).join('');
   return `<section class="inbox" id="demandes" aria-labelledby="requests-title">${intro}
     <p class="note">Les familles qui vous contactent depuis votre fiche. Vous recevez aussi chaque demande par email. Elles restent ici 12 mois.</p>
@@ -1725,7 +1757,7 @@ function partnerRequests(requests) {
   </script>`;
 }
 
-export function partnerPage({ regions, photo = false, requests = null }) {
+export function partnerPage({ regions, photo = false, requests = null, payments = '' }) {
   const field = (label, name, attrs = '', extra = '') => `<label class="field${extra}"><span>${label}</span><input name="${name}" ${attrs}></label>`;
   const req = ' <span aria-hidden="true">*</span>';
   const opt = ' <span class="optional">(facultatif)</span>';
@@ -1783,6 +1815,7 @@ export function partnerPage({ regions, photo = false, requests = null }) {
     </aside>
   </div>
   ${partnerRequests(requests)}
+  ${payments}
 </div></main>
 <script>
 const fmt=new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'});const input=document.getElementById('net');function familyPrice(n){const net=Math.round(n*100);const total=Math.round(net/0.85);return {total:total/100,fee:(total-net)/100};}function validRate(val){const n=Number(val);return String(val).trim()!==''&&Number.isFinite(n)&&n>=1&&n<=100000&&Math.abs(n*100-Math.round(n*100))<0.000001;}function update(){const val=input.value;const valid=validRate(val);document.getElementById('calc-error').hidden=valid||String(val).trim()==='';input.setAttribute('aria-invalid',String(!valid&&String(val).trim()!==''));document.getElementById('total-value').textContent='—';document.getElementById('fee-value').textContent='—';if(!valid)return;const p=familyPrice(Number(val));document.getElementById('total-value').textContent=fmt.format(p.total);document.getElementById('fee-value').textContent=fmt.format(p.fee);}input.addEventListener('input',update);update();
@@ -1799,3 +1832,6 @@ form.onsubmit=async e=>{e.preventDefault();if(!ready)return;const missing=[...fo
 loadProfile();
 </script>`, { space: true });
 }
+
+// Utilisés par worker/payments.js (inséré dans le même fichier au build).
+export { SITE_ORIGIN, catalogHeaders, catalogResponse, escapeHtml, formatDate, icon, layout, contactLink };

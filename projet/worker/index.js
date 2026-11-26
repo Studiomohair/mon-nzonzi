@@ -1,4 +1,5 @@
 import { adminEmails, adminPage, catalog, partnerPage, reviewsAdminApi, sendMail, sendReviewInvitations, spaceGatePage } from './catalog.js';
+import { adminPaymentsApi, adminPaymentsSection, bookingRoute, bookingsCron, partnerBookings, partnerPaymentsApi, stripeWebhook } from './payments.js';
 
 function page(html,status=200,privatePage=false){return new Response(html,{status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':privatePage?'private, no-store':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin','X-Robots-Tag':privatePage?'noindex, nofollow':'all'}});}
 
@@ -53,24 +54,31 @@ async function adminApi(request,env,url,ctx){
 }
 export default {
 // Tâche planifiée quotidienne (wrangler.toml, [triggers]) : invitations à donner un avis après la cérémonie.
-async scheduled(event,env,ctx){await background(ctx,sendReviewInvitations(env));},
+// Réservations payantes : versements, emails de solde et de confirmation (sans effet si Stripe n'est pas configuré).
+async scheduled(event,env,ctx){await background(ctx,sendReviewInvitations(env));await background(ctx,bookingsCron(env,undefined,Date.now(),ctx));},
 async fetch(request,env,ctx){
  const url=new URL(request.url);const readApi=url.pathname==='/api/demandes';const photo=url.pathname==='/api/photo';const api=url.pathname==='/api/profil';const partner=url.pathname==='/partenaire'||url.pathname==='/partenaire/';
- const adminView=url.pathname==='/partenaire/admin';const reviewsApiPath=url.pathname==='/api/admin/avis';const adminApiPath=url.pathname==='/api/admin/profils'||reviewsApiPath;
+ const adminView=url.pathname==='/partenaire/admin';const reviewsApiPath=url.pathname==='/api/admin/avis';const paymentsAdminPath=url.pathname==='/api/admin/paiements';const adminApiPath=url.pathname==='/api/admin/profils'||reviewsApiPath||paymentsAdminPath;
+ const paymentsApi=url.pathname==='/api/reservations'||url.pathname==='/api/paiements/stripe';
+ // Pages publiques des réservations (lien personnel de la famille) et webhook Stripe (signé) : hors de Cloudflare Access.
+ if(url.pathname==='/stripe/webhook')return stripeWebhook(request,env,ctx);
+ if(url.pathname.startsWith('/reservation/'))return bookingRoute(request,env,url.pathname.slice(13),ctx);
  if(adminView||adminApiPath){
   const id=request.headers.get('oai-authenticated-user-id');const email=(request.headers.get('oai-authenticated-user-email')||'').trim().toLowerCase();
   if(!id||!email)return adminApiPath?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
   if(!emailSet(env.NZOZI_ADMIN_EMAILS).has(email))return adminApiPath?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
   if(reviewsApiPath)return reviewsAdminApi(request,env,url);
+  if(paymentsAdminPath)return adminPaymentsApi(request,env,url,ctx);
   if(adminApiPath)return adminApi(request,env,url,ctx);
   if(!['GET','HEAD'].includes(request.method))return new Response('Méthode non autorisée',{status:405});
-  return page(request.method==='HEAD'?null:adminPage(),200,true);
+  return page(request.method==='HEAD'?null:adminPage(adminPaymentsSection(env)),200,true);
  }
- if(api||partner||photo||readApi){
+ if(api||partner||photo||readApi||paymentsApi){
   const id=request.headers.get('oai-authenticated-user-id');const email=(request.headers.get('oai-authenticated-user-email')||'').trim().toLowerCase();
-  if(!id||!email)return (api||photo||readApi)?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
+  if(!id||!email)return (api||photo||readApi||paymentsApi)?json({error:'Connexion requise.'},401):page(spaceGatePage('login'),401,true);
   // NZOZI_OPEN_SIGNUP="true" : tout email vérifié par Cloudflare Access peut créer un profil (publié seulement après validation).
-  if(env.NZOZI_OPEN_SIGNUP!=='true'&&!emailSet(env.NZOZI_ALLOWED_EMAILS).has(email))return (api||photo||readApi)?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
+  if(env.NZOZI_OPEN_SIGNUP!=='true'&&!emailSet(env.NZOZI_ALLOWED_EMAILS).has(email))return (api||photo||readApi||paymentsApi)?json({error:'Accès non autorisé.'},403):page(spaceGatePage('denied'),403,true);
+  if(paymentsApi)return partnerPaymentsApi(request,env,url,ctx,id,email);
 
   if(photo){
    if(!['GET','PUT','DELETE'].includes(request.method))return json({error:'Méthode non autorisée.'},405);
@@ -131,7 +139,10 @@ async fetch(request,env,ctx){
   // Demandes des familles reçues par ce nzonzi (via le slug de sa fiche), 12 derniers mois.
   let requests=null;
   if(env.DB){try{const mine=await env.DB.prepare('SELECT slug FROM nzozi_profiles WHERE user_id = ?').bind(id).first();if(mine?.slug){({results:requests}=await env.DB.prepare("SELECT reference, family_name, family_email, family_phone, ceremony_city, ceremony_venue, ceremony_address, ceremony_date, message, created_at, read_at FROM contact_requests WHERE profile_slug = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 50").bind(mine.slug).all());}}catch{requests=null;}}
-  return page(partnerPage({regions,photo:Boolean(env.BUCKET),requests}),200,true);
+  // Réservations payantes (si activées pour ce nzonzi) : bouton Accepter/Refuser sous chaque demande.
+  const bookings=await partnerBookings(env,url,id,email,requests);
+  if(requests)requests=requests.map(r=>({...r,extra:bookings.extras.get(r.reference)||''}));
+  return page(partnerPage({regions,photo:Boolean(env.BUCKET),requests,payments:bookings.section}),200,true);
  }
  const catalogPage=await catalog(request,env,regions);
  if(catalogPage)return catalogPage;

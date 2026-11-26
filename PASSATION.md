@@ -71,3 +71,4 @@ Prochain objectif fonctionnel ; maintien ou changement d’hébergement ; authen
 
 ## Mise à jour du 26/11/2026 (avis des familles)
 - Avis vérifiés : invitation par email après la cérémonie (tâche planifiée quotidienne), formulaire `/avis/<lien>`, validation dans `/partenaire/admin`, note moyenne et avis sur les fiches et l'annuaire. Table `reviews` (migration 0006). Détails dans `projet/DEPLOIEMENT.md`, contrôle `scripts/check-reviews.mjs`.
+- Réservations payantes (Stripe Connect, désactivées par défaut) : le nzonzi accepte une demande et fixe le prix, la famille paie un acompte de 30 % (versé au nzonzi après 14 jours) puis le solde à partir de J-80, bloqué jusqu’à sa confirmation après la cérémonie ; litiges et remboursements dans l’admin. Tables `stripe_accounts` et `bookings` (migration 0007), code `projet/worker/payments.js`, contrôle `scripts/check-payments.mjs`, mise en route dans `projet/DEPLOIEMENT.md`.
