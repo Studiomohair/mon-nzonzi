@@ -1345,8 +1345,9 @@ export async function reviewsAdminApi(request, env, url) {
 
 // Informations légales. Les valeurs vides s'affichent « à compléter ».
 const legalInfo = {
-  publisher: '',          // Nom et prénom de l'entrepreneur, ou raison sociale
-  legalForm: '',          // Ex. Entrepreneur individuel (micro-entreprise)
+  publisher: '',          // Nom et prénom de l'entrepreneur (suivis de « EI » à l'affichage)
+  tradeName: 'MiAgency',  // Nom commercial
+  legalForm: 'Entrepreneur individuel (EI), micro-entreprise',
   address: '',            // Adresse du siège
   siren: '882 137 425',   // Numéro SIREN (9 chiffres)
   siret: '',              // Numéro SIRET (14 chiffres)
@@ -1356,6 +1357,10 @@ const legalInfo = {
 };
 function info(key, label) {
   return legalInfo[key] ? escapeHtml(legalInfo[key]) : `<mark class="todo">${label} à compléter</mark>`;
+}
+function publisherName() {
+  const name = legalInfo.publisher ? `${escapeHtml(legalInfo.publisher)} EI` : info('publisher', 'Nom et prénom de l’entrepreneur');
+  return legalInfo.tradeName ? `${escapeHtml(legalInfo.tradeName)} (${name})` : name;
 }
 function contactLink() {
   return legalInfo.email ? `<a href="mailto:${escapeHtml(legalInfo.email)}">${escapeHtml(legalInfo.email)}</a>` : info('email', 'Email de contact');
@@ -1371,8 +1376,10 @@ function legalPage(title, body) {
 const legalPages = {
   '/mentions-legales': () => legalPage('Mentions légales', `
   <h2>Éditeur du site</h2>
+  <p>Mon Nzonzi est un service édité par ${escapeHtml(legalInfo.tradeName || 'son éditeur')}.</p>
   <dl>
-    <dt>Nom</dt><dd>${info('publisher', 'Nom ou raison sociale')}</dd>
+    <dt>Nom commercial</dt><dd>${info('tradeName', 'Nom commercial')}</dd>
+    <dt>Entrepreneur</dt><dd>${legalInfo.publisher ? `${escapeHtml(legalInfo.publisher)} EI` : info('publisher', 'Nom et prénom de l’entrepreneur')}</dd>
     <dt>Statut</dt><dd>${info('legalForm', 'Statut juridique')}</dd>
     <dt>Adresse</dt><dd>${info('address', 'Adresse')}</dd>
     <dt>SIREN</dt><dd>${info('siren', 'SIREN')}</dd>
@@ -1391,7 +1398,7 @@ const legalPages = {
   '/confidentialite': () => legalPage('Politique de confidentialité', `
   <p>Cette page explique quelles données Mon Nzonzi utilise, pourquoi, et comment exercer vos droits. Nous collectons seulement ce qui est utile à la mise en relation.</p>
   <h2>Responsable du traitement</h2>
-  <p>${info('publisher', 'Nom ou raison sociale')}, ${info('address', 'Adresse')}. Contact : ${contactLink()}.</p>
+  <p>${publisherName()}, ${info('address', 'Adresse')}. Contact : ${contactLink()}.</p>
   <h2>Les données que nous utilisons</h2>
   <ul>
     <li><strong>Familles</strong> : nom, email, téléphone (facultatif), ville, lieu, adresse (pour une salle ou un domicile) et date de la cérémonie, message. Elles servent uniquement à transmettre votre demande au nzonzi choisi.</li>
