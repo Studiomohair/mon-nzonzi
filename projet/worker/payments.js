@@ -1,4 +1,4 @@
-import { PAYMENT_RULES, SITE_ORIGIN, adminEmails, catalogHeaders, escapeHtml, formatDate, icon, layout, mailButton, mailDetails, paymentRulesHtml, sendMail } from './catalog.js';
+import { PAYMENT_RULES, SITE_ORIGIN, adminEmails, bookingsActiveFor, stripeKeyMode, catalogHeaders, escapeHtml, formatDate, icon, layout, mailButton, mailDetails, paymentRulesHtml, sendMail } from './catalog.js';
 
 // ——— Réservation et paiement sur la plateforme (Stripe Connect, comptes Express) ———
 // 1. La famille envoie une demande depuis la fiche (formulaire existant).
@@ -50,7 +50,6 @@ const payRefundedAll = b => b.deposit_refunded + b.balance_refunded;
 // Acompte versé au nzonzi après le délai de rétractation, ou le jour de la cérémonie si elle a lieu avant.
 const depositDueAt = b => Math.min(new Date(b.deposit_paid_at).getTime() + DEPOSIT_RELEASE_DAYS * PAY_DAY_MS, payDay(b.ceremony_date) - 12 * 3600 * 1000);
 const payChanges = result => Number(result?.meta?.changes ?? result?.changes ?? 0);
-const payEmailSet = value => new Set(String(value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
 const payHeaders = { ...catalogHeaders, 'X-Robots-Tag': 'noindex, nofollow' };
 const payRef = id => String(id).slice(0, 8).toUpperCase();
 const payDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? new Date(value + 'T12:00:00Z').getTime() : NaN;
@@ -85,16 +84,12 @@ export function payCents(value) {
 
 // 'test', 'live' ou null (paiements indisponibles).
 export function stripeMode(env) {
-  const key = String(env?.STRIPE_SECRET_KEY || '');
-  if (/^(sk|rk)_test_/.test(key)) return 'test';
-  if (/^(sk|rk)_live_/.test(key)) return env?.PAYMENTS_LIVE === 'true' ? 'live' : null;
-  return null;
+  return stripeKeyMode(env);
 }
 const payLivemode = env => stripeMode(env) === 'live' ? 1 : 0;
 // Le nzonzi connecté utilise-t-il les réservations payantes ?
 export function paymentsEnabledFor(env, email) {
-  if (!stripeMode(env) || !env?.DB) return false;
-  return env.PAYMENTS_ENABLED === 'true' || payEmailSet(env.PAYMENTS_TEST_EMAILS).has(String(email || '').toLowerCase());
+  return Boolean(env?.DB) && bookingsActiveFor(env, email);
 }
 
 function stripeForm(data, prefix = '', out = new URLSearchParams()) {
@@ -163,7 +158,7 @@ async function payRefreshAccount(env, row) {
 // Renvoie la section « Paiements » (compte Stripe) et, pour chaque demande de famille,
 // le bloc « Accepter / Refuser » ou l'état de la réservation (clé : référence de la demande).
 export async function partnerBookings(env, url, userId, email, requests) {
-  const empty = { section: '', extras: new Map() };
+  const empty = { section: '', extras: new Map(), masked: () => false };
   if (!paymentsEnabledFor(env, email)) return empty;
   let account = null, bookings = [], profile = null;
   try {
@@ -173,7 +168,7 @@ export async function partnerBookings(env, url, userId, email, requests) {
     if (account && (!payAccountReady(account) || url.searchParams.has('stripe'))) account = await payRefreshAccount(env, account);
     ({ results: bookings } = await env.DB.prepare('SELECT * FROM bookings WHERE user_id = ? AND livemode = ? ORDER BY created_at DESC LIMIT 100').bind(userId, payLivemode(env)).all());
   } catch {
-    return { section: `<section class="inbox" id="paiements" aria-labelledby="payments-title"><h2 id="payments-title">Mes <strong>paiements</strong></h2><p class="result">Les paiements sont momentanément indisponibles. Rechargez la page.</p></section>`, extras: new Map() };
+    return { section: `<section class="inbox" id="paiements" aria-labelledby="payments-title"><h2 id="payments-title">Mes <strong>paiements</strong></h2><p class="result">Les paiements sont momentanément indisponibles. Rechargez la page.</p></section>`, extras: new Map(), masked: () => true };
   }
   const test = stripeMode(env) === 'test';
   const ready = payAccountReady(account);
@@ -181,8 +176,10 @@ export async function partnerBookings(env, url, userId, email, requests) {
   const latest = new Map();
   for (const b of bookings) if (!latest.has(b.reference)) latest.set(b.reference, b);
   const extras = new Map();
+  const unmasked = new Set();   // demandes dont l'acompte est payé : coordonnées visibles
   for (const r of requests || []) {
     const b = latest.get(r.reference);
+    if (b && b.deposit_paid_at && b.status !== 'refunded') unmasked.add(r.reference);
     if (b && b.status !== 'cancelled' && b.status !== 'declined') { extras.set(r.reference, payBookingState(b)); continue; }
     const again = b ? `<p class="note">${b.status === 'declined' ? 'Vous avez refusé cette demande.' : 'La réservation précédente a été annulée.'}</p>` : '';
     if (!ready) { extras.set(r.reference, `<div class="booking">${again}<p class="note">Pour accepter cette demande et que la famille réserve sur Mon Nzonzi, <a class="link" href="#paiements">activez d’abord vos paiements</a>.</p></div>`); continue; }
@@ -276,7 +273,7 @@ export async function partnerBookings(env, url, userId, email, requests) {
     });
   })();
   </script>`;
-  return { section, extras };
+  return { section, extras, masked: reference => !unmasked.has(reference) };
 }
 function payBookingState(b) {
   const day = v => formatDate.format(new Date(v));
@@ -393,7 +390,7 @@ export async function partnerPaymentsApi(request, env, url, ctx, userId, email) 
 }
 
 async function payBooking(env, where, ...args) {
-  return env.DB.prepare(`SELECT b.*, p.published_json, p.profile_json FROM bookings b LEFT JOIN nzozi_profiles p ON p.user_id = b.user_id WHERE ${where}`).bind(...args).first();
+  return env.DB.prepare(`SELECT b.*, p.published_json, p.profile_json, c.family_phone FROM bookings b LEFT JOIN nzozi_profiles p ON p.user_id = b.user_id LEFT JOIN contact_requests c ON c.reference = b.reference WHERE ${where}`).bind(...args).first();
 }
 const payNz = row => { try { return JSON.parse(row.published_json || row.profile_json); } catch { return { firstName: 'Votre nzonzi', lastName: '' }; } };
 const testLine = test => test ? '<p style="margin:0 0 14px;padding:10px 14px;border:1px dashed #8C3D20;border-radius:10px;background:#F3E1D9;font-size:13px"><strong>Mode test</strong> · aucun vrai paiement.</p>' : '';
@@ -475,7 +472,7 @@ function payNzonziMail(env, row, step, origin) {
   const date = payFmtDay(row.ceremony_date);
   const space = origin + '/partenaire#demandes';
   const messages = {
-    'paid-deposit': [`${row.family_name} a réservé`, `${row.family_name} a payé l’acompte de ${payEuro(row.deposit_cents)} : la cérémonie du ${date} est réservée. Vous recevrez ${payEuro(partNet(row, 'deposit'))} le ${row.deposit_paid_at ? formatDate.format(new Date(depositDueAt(row))) : ''} (après le délai de rétractation de la famille). Pour préparer la cérémonie : ${row.family_email}.`],
+    'paid-deposit': [`${row.family_name} a réservé`, `${row.family_name} a payé l’acompte de ${payEuro(row.deposit_cents)} : la cérémonie du ${date} est réservée. Vous recevrez ${payEuro(partNet(row, 'deposit'))} le ${row.deposit_paid_at ? formatDate.format(new Date(depositDueAt(row))) : ''} (après le délai de rétractation de la famille). Coordonnées de la famille pour préparer la cérémonie : ${[row.family_email, row.family_phone].filter(Boolean).join(' · ')}.`],
     'paid-balance': [`${row.family_name} a payé le solde`, `${row.family_name} a payé le solde de ${payEuro(row.balance_cents)} pour la cérémonie du ${date}. Vous recevrez ${payEuro(partNet(row, 'balance'))} après la cérémonie, dès que la famille l’aura confirmée (ou automatiquement ${RELEASE_AFTER_DAYS} jours après, sans réponse de sa part).`],
     'released-deposit': [`Acompte versé : ${payEuro(partNet(row, 'deposit'))}`, `L’acompte de la cérémonie avec ${row.family_name} (${date}) vous a été versé : ${payEuro(partNet(row, 'deposit'))}. Il arrive sur votre compte bancaire selon le calendrier de virement Stripe.`],
     released: [`Solde versé : ${payEuro(partNet(row, 'balance'))}`, `Le solde de la cérémonie avec ${row.family_name} (${date}) vous a été versé : ${payEuro(partNet(row, 'balance'))}. Il arrive sur votre compte bancaire selon le calendrier de virement Stripe (en général quelques jours).`],
